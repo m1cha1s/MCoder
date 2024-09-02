@@ -3,7 +3,12 @@
 #include <string.h>
 #include <raylib.h>
 
+#define IMPLS
+
 #include "utils.h"
+#include "arena.h"
+
+#define TEMP_ARENA_SIZE KB(1)
 
 typedef struct _Buffer {
     Font font;
@@ -22,9 +27,12 @@ typedef struct _Buffer {
     
     usize cursorLine;
     usize cursorCol;
+    
+    Arena tempArena;
 } Buffer;
 
 Buffer InitBuffer(usize cap);
+void DeinitBuffer(Buffer *buffer);
 void InsertBuffer(Buffer *buffer, s32 codepoint);
 void BackspaceBuffer(Buffer *buffer);
 void DrawBuffer(Buffer *buffer);
@@ -56,34 +64,29 @@ s32 main() {
             if (buffer.cursorPos) {
                 buffer.cursorPos--;
                 BufferFixCursorLineCol(&buffer);
-                printf("Line: %d Col: %d\n", buffer.cursorLine, buffer.cursorCol);
             }
         }
         if (IsKeyPressed(KEY_RIGHT) || IsKeyPressedRepeat(KEY_RIGHT)) {
             if (buffer.cursorPos < buffer.bufferLen) {
                 buffer.cursorPos++;
                 BufferFixCursorLineCol(&buffer);
-                printf("Line: %d Col: %d\n", buffer.cursorLine, buffer.cursorCol);
             }
         }
         if (IsKeyPressed(KEY_UP) || IsKeyPressedRepeat(KEY_UP)) {
             if (buffer.cursorLine) {
                 buffer.cursorLine--;
                 BufferFixCursorPos(&buffer);
-                printf("Line: %d Col: %d\n", buffer.cursorLine, buffer.cursorCol);
             }
         }
         if (IsKeyPressed(KEY_DOWN) || IsKeyPressedRepeat(KEY_DOWN)) {
             if (buffer.cursorLine < buffer.bufferLines) {
                 buffer.cursorLine++;
                 BufferFixCursorPos(&buffer);
-                printf("Line: %d Col: %d\n", buffer.cursorLine, buffer.cursorCol);
             }
         }
         
         s32 key;
         if (key = GetKeyPressed()) {
-            printf("Key:  %d\n", key);
             switch (key) {
                 case KEY_ENTER: InsertBuffer(&buffer, '\n'); break;
                 case KEY_BACKSPACE: BackspaceBuffer(&buffer); break;
@@ -95,7 +98,6 @@ s32 main() {
         
         s32 c;
         if (c = GetCharPressed()) {
-            printf("Char: %d\n", c);
             InsertBuffer(&buffer, c);
         }
         
@@ -126,7 +128,14 @@ Buffer InitBuffer(usize cap) {
         .bufferLen = 0,
         .bufferCap = cap,
         .cursorPos = 0,
+        
+        .tempArena = InitArena(TEMP_ARENA_SIZE),
     };
+}
+
+void DeinitBuffer(Buffer *buffer) {
+    UnloadFont(buffer->font);
+    DeinitArena(&buffer->tempArena);
 }
 
 void InsertBuffer(Buffer *buffer, s32 codepoint) {
@@ -204,6 +213,22 @@ void DrawBuffer(Buffer *buffer) {
     }
     
     // Draw the status bar.
+    f32 statusBarHeight = buffer->fontSize + 2*buffer->textLineSpacing;
+    DrawRectangle(0, GetScreenHeight()-statusBarHeight, GetScreenWidth(), statusBarHeight, WHITE);
+    
+    char *lcText = tfmt(&buffer->tempArena, "Line: %d Col: %d", buffer->cursorLine+1, buffer->cursorCol+1);
+    
+    Vector2 mt = MeasureTextEx(buffer->font, lcText, buffer->fontSize, buffer->textSpacing);
+    
+    // DrawFText(&buffer->tempArena,
+    //           400, 300, 20, PINK, "mt: (%.4f,%.4f)", mt.x, mt.y);
+    
+    DrawTextEx(buffer->font, lcText, 
+             (Vector2){GetScreenWidth()-(mt.x + 2*buffer->textSpacing), 
+             GetScreenHeight()-(buffer->fontSize + buffer->textLineSpacing)}, 
+             buffer->fontSize, buffer->textSpacing, BLACK);
+    
+    ResetArena(&buffer->tempArena);
 }
 
 void BufferFixCursorPos(Buffer *buffer) {
