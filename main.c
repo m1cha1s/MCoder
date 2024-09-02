@@ -16,14 +16,21 @@ typedef struct _Buffer {
     s32 *buffer;
     usize bufferLen;
     usize bufferCap;
+    usize bufferLines;
     
     usize cursorPos;
+    
+    usize cursorLine;
+    usize cursorCol;
 } Buffer;
 
 Buffer InitBuffer(usize cap);
 void InsertBuffer(Buffer *buffer, s32 codepoint);
 void BackspaceBuffer(Buffer *buffer);
 void DrawBuffer(Buffer *buffer);
+
+void BufferFixCursorPos(Buffer *buffer);
+void BufferFixCursorLineCol(Buffer *buffer);
 
 s32 main() {
     InitWindow(800, 600, "MCoder");
@@ -45,15 +52,44 @@ s32 main() {
     while (!WindowShouldClose()) {
         if (IsWindowResized()) { /* Update the window size. */ }
         
+        if (IsKeyPressed(KEY_LEFT) || IsKeyPressedRepeat(KEY_LEFT)) {
+            if (buffer.cursorPos) {
+                buffer.cursorPos--;
+                BufferFixCursorLineCol(&buffer);
+                printf("Line: %d Col: %d\n", buffer.cursorLine, buffer.cursorCol);
+            }
+        }
+        if (IsKeyPressed(KEY_RIGHT) || IsKeyPressedRepeat(KEY_RIGHT)) {
+            if (buffer.cursorPos < buffer.bufferLen) {
+                buffer.cursorPos++;
+                BufferFixCursorLineCol(&buffer);
+                printf("Line: %d Col: %d\n", buffer.cursorLine, buffer.cursorCol);
+            }
+        }
+        if (IsKeyPressed(KEY_UP) || IsKeyPressedRepeat(KEY_UP)) {
+            if (buffer.cursorLine) {
+                buffer.cursorLine--;
+                BufferFixCursorPos(&buffer);
+                printf("Line: %d Col: %d\n", buffer.cursorLine, buffer.cursorCol);
+            }
+        }
+        if (IsKeyPressed(KEY_DOWN) || IsKeyPressedRepeat(KEY_DOWN)) {
+            if (buffer.cursorLine < buffer.bufferLines) {
+                buffer.cursorLine++;
+                BufferFixCursorPos(&buffer);
+                printf("Line: %d Col: %d\n", buffer.cursorLine, buffer.cursorCol);
+            }
+        }
+        
         s32 key;
         if (key = GetKeyPressed()) {
             printf("Key:  %d\n", key);
             switch (key) {
                 case KEY_ENTER: InsertBuffer(&buffer, '\n'); break;
-                case KEY_LEFT: if (buffer.cursorPos) buffer.cursorPos--; break;
-                case KEY_RIGHT: if (buffer.cursorPos < buffer.bufferLen) buffer.cursorPos++; break;
                 case KEY_BACKSPACE: BackspaceBuffer(&buffer); break;
                 case KEY_DELETE: if (buffer.cursorPos < buffer.bufferLen) buffer.cursorPos++; BackspaceBuffer(&buffer); break;
+                
+                case KEY_TAB: for (s32 i=0;i<4;++i) InsertBuffer(&buffer, ' '); break;
             }
         }
         
@@ -78,7 +114,8 @@ s32 main() {
 
 Buffer InitBuffer(usize cap) {
     return (Buffer){
-        .font = GetFontDefault(),
+        // .font = GetFontDefault(),
+        .font = LoadFont("assets/IosevkaFixed-Medium.ttf"),
         .fontSize = 20,
         .fontSpacing = 3,
         
@@ -97,16 +134,22 @@ void InsertBuffer(Buffer *buffer, s32 codepoint) {
         // TODO(m1cha1s): Expand buffer.
     }
     
+    if (codepoint == '\n') buffer->bufferLines++;
+    
     memmove(buffer->buffer+buffer->cursorPos+1,
             buffer->buffer+buffer->cursorPos,
             (buffer->bufferLen-buffer->cursorPos)*sizeof(s32));
             
     buffer->buffer[buffer->cursorPos++] = codepoint;
     buffer->bufferLen++;
+    
+    BufferFixCursorLineCol(buffer);
 }
 
 void BackspaceBuffer(Buffer *buffer) {
     if ((!buffer->cursorPos) || (!buffer->bufferLen)) return;
+    
+    if (buffer->buffer[buffer->cursorPos-1] == '\n') buffer->bufferLines--;
     
     memmove(buffer->buffer+buffer->cursorPos-1,
             buffer->buffer+buffer->cursorPos,
@@ -114,6 +157,8 @@ void BackspaceBuffer(Buffer *buffer) {
     
     buffer->cursorPos--;
     buffer->bufferLen--;
+    
+    BufferFixCursorLineCol(buffer);
 }
 
 void DrawBuffer(Buffer *buffer) {
@@ -121,22 +166,28 @@ void DrawBuffer(Buffer *buffer) {
     
     f32 scaleFactor = buffer->fontSize/buffer->font.baseSize;
     
-    for (usize i=0; i < buffer->bufferLen; ++i) {
-        s32 codepoint = buffer->buffer[i];
-        s32 index = GetGlyphIndex(buffer->font, codepoint);
+    for (usize i=0; i < buffer->bufferLen+1; ++i) {
+        s32 codepoint = 0;
+        s32 index = 0;
+    
+        if (i < buffer->bufferLen) {
+            codepoint = buffer->buffer[i];
+            index = GetGlyphIndex(buffer->font, codepoint);
+        }
+    
+        if (buffer->cursorPos == i) {
+            DrawRectangleV(textOffset,
+                           (Vector2){buffer->font.recs[index].width *scaleFactor + buffer->textSpacing,
+                                     buffer->fontSize + buffer->textLineSpacing},
+                           PINK);
+        }
+        
+        if (i >= buffer->bufferLen) continue;
         
         if (codepoint == '\n') {
             textOffset.y += (buffer->fontSize + buffer->textLineSpacing);
             textOffset.x = 0.0f;
         } else {
-            if (buffer->cursorPos == i) {
-                // TODO(m1cha1s): Fix not visible cursor on spaces and end of line.
-                DrawRectangleV(textOffset,
-                               (Vector2){buffer->font.recs[index].width *scaleFactor,
-                                         buffer->font.recs[index].height*scaleFactor},
-                               PINK);
-            }
-        
             if ((codepoint != ' ') && (codepoint != '\t')) {
                 DrawTextCodepoint(buffer->font,
                                   codepoint,
@@ -150,5 +201,43 @@ void DrawBuffer(Buffer *buffer) {
             else
                 textOffset.x += ((f32)buffer->font.glyphs[index].advanceX*scaleFactor + buffer->textSpacing);
         }
+    }
+    
+    // Draw the status bar.
+}
+
+void BufferFixCursorPos(Buffer *buffer) {
+    usize l=0, c=0;
+    
+    for (usize i=0; i < buffer->bufferLen; ++i) {
+        if (l==buffer->cursorLine && c==buffer->cursorCol) {
+            buffer->cursorPos = i;
+            return;
+        }
+        
+        if (buffer->buffer[i] == '\n' && l==buffer->cursorLine) {
+            buffer->cursorPos = i;
+            return;
+        }
+        
+        if (buffer->buffer[i] == '\n' && l!=buffer->cursorLine) {
+            l++;
+            c=0;
+            continue;
+        }
+        
+        c++;
+    }
+}
+
+void BufferFixCursorLineCol(Buffer *buffer) {
+    buffer->cursorLine = 0;
+    buffer->cursorCol  = 0;
+    for (usize i=0; i < buffer->cursorPos; ++i) {
+        
+        if (buffer->buffer[i] == '\n' && i!=buffer->cursorPos) {
+            buffer->cursorLine++;
+            buffer->cursorCol=0;
+        } else buffer->cursorCol++;
     }
 }
