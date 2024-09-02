@@ -37,6 +37,7 @@ typedef struct _Buffer {
     char *path;
     
     RenderTexture2D renderTex;
+    f32 viewLoc;
 } Buffer;
 
 typedef struct _Editor {
@@ -68,7 +69,7 @@ s32 main() {
     
     Buffer buffer = InitBuffer(KB(1));
     
-    BufferOpenFile(&buffer, "dummy.txt");
+    BufferOpenFile(&buffer, "main.c");
     
     while (!WindowShouldClose()) {
         if (IsWindowResized()) { 
@@ -174,7 +175,7 @@ void BackspaceBuffer(Buffer *buffer) {
 void DrawBuffer(Buffer *buffer) {
     BeginTextureMode(buffer->renderTex);
     ClearBackground(BLACK);
-    Vector2 textOffset = {0};
+    Vector2 textOffset = {0,-buffer->viewLoc};
     
     f32 scaleFactor = buffer->fontSize/buffer->font.baseSize;
     
@@ -212,7 +213,10 @@ void DrawBuffer(Buffer *buffer) {
                 textOffset.y += (buffer->fontSize + buffer->textLineSpacing);
             }
             
-            if ((codepoint != ' ') && (codepoint != '\t')) {
+            if ((codepoint != ' ') && 
+                (codepoint != '\t') && 
+                (textOffset.y >= 0) && 
+                ((textOffset.y+buffer->fontSize) <= buffer->renderTex.texture.height)) {
                 DrawTextCodepoint(buffer->font,
                                   codepoint,
                                   textOffset,
@@ -321,6 +325,9 @@ s32 BufferOpenFile(Buffer *buffer, char *path) {
     }
     
     fclose(buffer->file);
+    
+    buffer->cursorPos = 0;
+    BufferFixCursorLineCol(buffer);
 }
 
 s32 BufferSave(Buffer *buffer) {
@@ -404,4 +411,7 @@ void BufferHandleInput(Buffer *buffer) {
             InsertBuffer(buffer, c);
         }
     }
+    
+    Vector2 movement = GetMouseWheelMoveV();
+    buffer->viewLoc += -movement.y*10;
 }
