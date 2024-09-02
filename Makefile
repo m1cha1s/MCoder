@@ -1,20 +1,27 @@
-_dummy := $(shell mkdir -p build)
-
 CC := cc
-AR := ar
 
-CFLAGS := -O0 -g -I glfw/include
+CFLAGS := -O0 -g -I raylib/src
 LDFLAGS := -framework Cocoa -framework IOKit -framework CoreFoundation
 
 EXE := MCoder
 
-SRC := $(shell find . -depth 1 -name "*.c")
+SRC := $(shell find . -depth 1 -name "*.c") 
 
-$(EXE): $(SRC) build/glfw.a
+$(EXE): $(SRC) raylib/src/libraylib.a
 	$(CC) $^ -o $@ $(CFLAGS) $(LDFLAGS)
+	
+raylib/src/libraylib.a: raylib
+	make -C raylib/src PLATFORM=PLATFORM_DESKTOP -j
 
-include glfw.mk
+raylib:
+	git submodule update --init --recursive
 
 .PHONY: clean build run
 
 build: $(EXE)
+
+run: $(EXE)
+	./$(EXE)
+	
+clean:
+	rm -f $(EXE)
