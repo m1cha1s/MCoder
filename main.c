@@ -8,6 +8,9 @@
 #include "utils.h"
 #include "arena.h"
 
+#define WIDTH  800
+#define HEIGHT 600
+
 #define TEMP_ARENA_SIZE KB(1)
 
 typedef struct _Buffer {
@@ -32,6 +35,8 @@ typedef struct _Buffer {
     
     FILE *file;
     char *path;
+    
+    RenderTexture2D renderTex;
 } Buffer;
 
 Buffer InitBuffer(usize cap);
@@ -48,7 +53,7 @@ void BufferFixCursorLineCol(Buffer *buffer);
 void BufferHandleInput(Buffer *buffer);
 
 s32 main() {
-    InitWindow(800, 600, "MCoder");
+    InitWindow(WIDTH, HEIGHT, "MCoder");
     SetWindowState(FLAG_WINDOW_RESIZABLE);
     
     SetTargetFPS(60);
@@ -58,7 +63,10 @@ s32 main() {
     BufferOpenFile(&buffer, "dummy.txt");
     
     while (!WindowShouldClose()) {
-        if (IsWindowResized()) { /* Update the window size. */ }
+        if (IsWindowResized()) { 
+            UnloadRenderTexture(buffer.renderTex);
+            buffer.renderTex = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
+        }
         
         BufferHandleInput(&buffer);
         
@@ -68,6 +76,12 @@ s32 main() {
                
         DrawBuffer(&buffer);
         
+        // DrawTexture(buffer.renderTex.texture, 0, 0, WHITE);
+        DrawTextureRec(buffer.renderTex.texture, 
+                       (Rectangle) {0,0,buffer.renderTex.texture.width,-buffer.renderTex.texture.height}, 
+                       (Vector2) {0,0}, 
+                       WHITE); 
+        
         EndDrawing();
     }
     
@@ -76,9 +90,11 @@ s32 main() {
 }
 
 Buffer InitBuffer(usize cap) {
-    return (Buffer){
+    Buffer b = {
         // .font = GetFontDefault(),
         .font = LoadFont("assets/IosevkaFixed-Medium.ttf"),
+        // .font = LoadFont("/System/Library/Fonts/Monaco.ttf"),
+        // .font = LoadFontEx("/System/Library/Fonts/Monaco.ttf", 32, NULL, 0),
         .fontSize = 20,
         .fontSpacing = 3,
         
@@ -91,7 +107,14 @@ Buffer InitBuffer(usize cap) {
         .cursorPos = 0,
         
         .tempArena = InitArena(TEMP_ARENA_SIZE),
+        
+        .path = "",
+        .renderTex = LoadRenderTexture(WIDTH, HEIGHT),
     };
+    
+    SetTextureFilter(b.font.texture, TEXTURE_FILTER_ANISOTROPIC_8X);
+    
+    return b;
 }
 
 void DeinitBuffer(Buffer *buffer) {
@@ -141,6 +164,8 @@ void BackspaceBuffer(Buffer *buffer) {
 }
 
 void DrawBuffer(Buffer *buffer) {
+    BeginTextureMode(buffer->renderTex);
+    ClearBackground(BLACK);
     Vector2 textOffset = {0};
     
     f32 scaleFactor = buffer->fontSize/buffer->font.baseSize;
@@ -194,8 +219,8 @@ void DrawBuffer(Buffer *buffer) {
     //           400, 300, 20, PINK, "mt: (%.4f,%.4f)", mt.x, mt.y);
     
     DrawTextEx(buffer->font, lcText, 
-             (Vector2){GetScreenWidth()-(mt.x + 2*buffer->textSpacing), 
-             GetScreenHeight()-(buffer->fontSize + buffer->textLineSpacing)}, 
+             (Vector2){buffer->renderTex.texture.width-(mt.x + 2*buffer->textSpacing), 
+             buffer->renderTex.texture.height-(buffer->fontSize + buffer->textLineSpacing)}, 
              buffer->fontSize, buffer->textSpacing, BLACK);
              
     char *pathText = tfmt(&buffer->tempArena, "Path: %s", buffer->path);
@@ -204,10 +229,12 @@ void DrawBuffer(Buffer *buffer) {
       
     DrawTextEx(buffer->font, pathText, 
              (Vector2){2*buffer->textSpacing, 
-             GetScreenHeight()-(buffer->fontSize + buffer->textLineSpacing)}, 
+             buffer->renderTex.texture.height-(buffer->fontSize + buffer->textLineSpacing)}, 
              buffer->fontSize, buffer->textSpacing, BLACK);
              
     ResetArena(&buffer->tempArena);
+    
+    EndTextureMode();
 }
 
 void BufferFixCursorPos(Buffer *buffer) {
@@ -346,6 +373,12 @@ void BufferHandleInput(Buffer *buffer) {
         if (key = GetKeyPressed()) {
             if (key == KEY_S) {
                 BufferSave(buffer);
+            }
+            if (key == KEY_EQUAL) {
+                buffer->fontSize+=4;
+            }
+            if (key == KEY_MINUS) {
+                buffer->fontSize-=4;
             }
         }
     } else {
