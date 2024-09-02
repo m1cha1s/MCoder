@@ -29,6 +29,9 @@ typedef struct _Buffer {
     usize cursorCol;
     
     Arena tempArena;
+    
+    FILE *file;
+    char *path;
 } Buffer;
 
 Buffer InitBuffer(usize cap);
@@ -36,9 +39,13 @@ void DeinitBuffer(Buffer *buffer);
 void InsertBuffer(Buffer *buffer, s32 codepoint);
 void BackspaceBuffer(Buffer *buffer);
 void DrawBuffer(Buffer *buffer);
+s32 BufferOpenFile(Buffer *buffer, char *path);
+s32 BufferSave(Buffer *buffer);
 
 void BufferFixCursorPos(Buffer *buffer);
 void BufferFixCursorLineCol(Buffer *buffer);
+
+void BufferHandleInput(Buffer *buffer);
 
 s32 main() {
     InitWindow(800, 600, "MCoder");
@@ -48,58 +55,12 @@ s32 main() {
     
     Buffer buffer = InitBuffer(KB(1));
     
-    // char *msg = "Hello \nWorld!";
-    
-    // for (usize i=0;i<strlen(msg);) {
-    //     s32 codepointByteCount = 0;
-    //     s32 codepoint = GetCodepointNext(&msg[i], &codepointByteCount);
-    //     InsertBuffer(&buffer, codepoint);
-    //     i += codepointByteCount;
-    // }
+    BufferOpenFile(&buffer, "dummy.txt");
     
     while (!WindowShouldClose()) {
         if (IsWindowResized()) { /* Update the window size. */ }
         
-        if (IsKeyPressed(KEY_LEFT) || IsKeyPressedRepeat(KEY_LEFT)) {
-            if (buffer.cursorPos) {
-                buffer.cursorPos--;
-                BufferFixCursorLineCol(&buffer);
-            }
-        }
-        if (IsKeyPressed(KEY_RIGHT) || IsKeyPressedRepeat(KEY_RIGHT)) {
-            if (buffer.cursorPos < buffer.bufferLen) {
-                buffer.cursorPos++;
-                BufferFixCursorLineCol(&buffer);
-            }
-        }
-        if (IsKeyPressed(KEY_UP) || IsKeyPressedRepeat(KEY_UP)) {
-            if (buffer.cursorLine) {
-                buffer.cursorLine--;
-                BufferFixCursorPos(&buffer);
-            }
-        }
-        if (IsKeyPressed(KEY_DOWN) || IsKeyPressedRepeat(KEY_DOWN)) {
-            if (buffer.cursorLine < buffer.bufferLines) {
-                buffer.cursorLine++;
-                BufferFixCursorPos(&buffer);
-            }
-        }
-        
-        s32 key;
-        if (key = GetKeyPressed()) {
-            switch (key) {
-                case KEY_ENTER: InsertBuffer(&buffer, '\n'); break;
-                case KEY_BACKSPACE: BackspaceBuffer(&buffer); break;
-                case KEY_DELETE: if (buffer.cursorPos < buffer.bufferLen) buffer.cursorPos++; BackspaceBuffer(&buffer); break;
-                
-                case KEY_TAB: for (s32 i=0;i<4;++i) InsertBuffer(&buffer, ' '); break;
-            }
-        }
-        
-        s32 c;
-        if (c = GetCharPressed()) {
-            InsertBuffer(&buffer, c);
-        }
+        BufferHandleInput(&buffer);
         
         BeginDrawing();
         
@@ -110,7 +71,7 @@ s32 main() {
         EndDrawing();
     }
     
-    UnloadFont(buffer.font);
+    DeinitBuffer(&buffer);
     CloseWindow();
 }
 
@@ -236,28 +197,44 @@ void DrawBuffer(Buffer *buffer) {
              (Vector2){GetScreenWidth()-(mt.x + 2*buffer->textSpacing), 
              GetScreenHeight()-(buffer->fontSize + buffer->textLineSpacing)}, 
              buffer->fontSize, buffer->textSpacing, BLACK);
+             
+    char *pathText = tfmt(&buffer->tempArena, "Path: %s", buffer->path);
     
+    mt = MeasureTextEx(buffer->font, pathText, buffer->fontSize, buffer->textSpacing);
+      
+    DrawTextEx(buffer->font, pathText, 
+             (Vector2){2*buffer->textSpacing, 
+             GetScreenHeight()-(buffer->fontSize + buffer->textLineSpacing)}, 
+             buffer->fontSize, buffer->textSpacing, BLACK);
+             
     ResetArena(&buffer->tempArena);
 }
 
 void BufferFixCursorPos(Buffer *buffer) {
     usize l=0, c=0;
     
-    for (usize i=0; i < buffer->bufferLen; ++i) {
+    for (usize i=0; i < buffer->bufferLen+1; ++i) {
         if (l==buffer->cursorLine && c==buffer->cursorCol) {
             buffer->cursorPos = i;
             return;
         }
         
-        if (buffer->buffer[i] == '\n' && l==buffer->cursorLine) {
-            buffer->cursorPos = i;
-            return;
-        }
-        
-        if (buffer->buffer[i] == '\n' && l!=buffer->cursorLine) {
-            l++;
-            c=0;
-            continue;
+        if (i < buffer->bufferLen) {
+            if (buffer->buffer[i] == '\n' && l==buffer->cursorLine) {
+                buffer->cursorPos = i;
+                return;
+            }
+            
+            if (buffer->buffer[i] == '\n' && l!=buffer->cursorLine) {
+                l++;
+                c=0;
+                continue;
+            }
+        } else {
+            if (l==buffer->cursorLine) {
+                buffer->cursorPos = i;
+                return;
+            }
         }
         
         c++;
@@ -273,5 +250,108 @@ void BufferFixCursorLineCol(Buffer *buffer) {
             buffer->cursorLine++;
             buffer->cursorCol=0;
         } else buffer->cursorCol++;
+    }
+}
+
+s32 BufferOpenFile(Buffer *buffer, char *path) {
+    buffer->path = path;
+    buffer->file = fopen(path, "r");
+    
+    if (!buffer->file) {
+        buffer->path = "";
+        return -1;
+    }
+    
+    fseek(buffer->file, 0L, SEEK_END);
+    usize fileSize = ftell(buffer->file);
+    rewind(buffer->file);
+    
+    char *fileContents = malloc(fileSize+1);
+    
+    fread(fileContents, fileSize, 1, buffer->file);
+    
+    for (usize i=0;i<fileSize;) {
+        s32 codepointSize = 0;
+        InsertBuffer(buffer, GetCodepointNext(fileContents+i, &codepointSize));
+        i += codepointSize;
+    }
+    
+    fclose(buffer->file);
+}
+
+s32 BufferSave(Buffer *buffer) {
+    f64 startTime = GetTime();
+    buffer->file = fopen(buffer->path, "w");
+    
+    for (usize i=0;i<buffer->bufferLen;++i) {
+        s32 size = 0;
+        char *utf8 = CodepointToUTF8(buffer->buffer[i], &size);
+        usize wsize = fwrite(utf8, size, 1, buffer->file);
+        
+        // printf("%d\n", wsize);
+    }
+    
+    fclose(buffer->file);
+    
+    f64 elapsedTime = GetTime()-startTime;
+    printf("Saved in %.2f seconds.\n", elapsedTime);
+}
+
+void BufferHandleInput(Buffer *buffer) {
+    if (IsKeyPressed(KEY_LEFT) || IsKeyPressedRepeat(KEY_LEFT)) {
+        if (buffer->cursorPos) {
+            buffer->cursorPos--;
+            BufferFixCursorLineCol(buffer);
+        }
+    }
+    if (IsKeyPressed(KEY_RIGHT) || IsKeyPressedRepeat(KEY_RIGHT)) {
+        if (buffer->cursorPos < buffer->bufferLen) {
+            buffer->cursorPos++;
+            BufferFixCursorLineCol(buffer);
+        }
+    }
+    if (IsKeyPressed(KEY_UP) || IsKeyPressedRepeat(KEY_UP)) {
+        if (buffer->cursorLine) {
+            buffer->cursorLine--;
+            BufferFixCursorPos(buffer);
+        }
+    }
+    if (IsKeyPressed(KEY_DOWN) || IsKeyPressedRepeat(KEY_DOWN)) {
+        if (buffer->cursorLine < buffer->bufferLines) {
+            buffer->cursorLine++;
+            BufferFixCursorPos(buffer);
+        }
+    }
+    
+    if (IsKeyPressed(KEY_BACKSPACE) || IsKeyPressedRepeat(KEY_BACKSPACE)) {
+        BackspaceBuffer(buffer);
+    }
+    
+    if (IsKeyPressed(KEY_DELETE) || IsKeyPressedRepeat(KEY_DELETE)) {
+        if (buffer->cursorPos < buffer->bufferLen) buffer->cursorPos++; 
+        BackspaceBuffer(buffer);
+    }
+    
+    if (IsKeyPressed(KEY_ENTER) || IsKeyPressedRepeat(KEY_ENTER)) {
+        InsertBuffer(buffer, '\n');
+    }
+    
+    if (IsKeyPressed(KEY_TAB) || IsKeyPressedRepeat(KEY_TAB)) {
+        s32 spacesToInsert = 4-(buffer->cursorCol % 4);
+        for (s32 i=0;i<spacesToInsert;++i) InsertBuffer(buffer, ' ');
+    }
+    
+    if (IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER)) {
+        s32 key;
+        if (key = GetKeyPressed()) {
+            if (key == KEY_S) {
+                BufferSave(buffer);
+            }
+        }
+    } else {
+        s32 c;
+        if (c = GetCharPressed()) {
+            InsertBuffer(buffer, c);
+        }
     }
 }
