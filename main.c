@@ -39,6 +39,14 @@ typedef struct _Buffer {
     RenderTexture2D renderTex;
 } Buffer;
 
+typedef struct _Editor {
+    Buffer *buffers;
+    usize bufferCount;
+    usize bufferCap;
+    
+    usize selectedBuffer;
+} Editor;
+
 Buffer InitBuffer(usize cap);
 void DeinitBuffer(Buffer *buffer);
 void InsertBuffer(Buffer *buffer, s32 codepoint);
