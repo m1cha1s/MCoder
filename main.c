@@ -140,7 +140,16 @@ void DeinitBuffer(Buffer *buffer) {
 
 void InsertBuffer(Buffer *buffer, s32 codepoint) {
     if (buffer->bufferLen+1 > buffer->bufferCap) {
-        // TODO(m1cha1s): Expand buffer.
+        printf("Growing buffer...\n");
+        s32 *newBuffer = malloc(buffer->bufferCap*2*sizeof(s32));
+        if (!newBuffer) {
+            printf("Failed to resize buffer, out of memory!\n");
+            exit(-1);
+        }
+        memcpy(newBuffer, buffer->buffer, sizeof(s32)*buffer->bufferLen);
+        free(buffer->buffer);
+        buffer->buffer = newBuffer;
+        buffer->bufferCap *= 2;
     }
     
     if (codepoint == '\n') buffer->bufferLines++;
