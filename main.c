@@ -11,6 +11,7 @@
 #define WIDTH  800
 #define HEIGHT 600
 
+#define BUFFER_COUNT 2
 #define TEMP_ARENA_SIZE KB(1)
 
 typedef struct _Buffer {
@@ -38,17 +39,29 @@ typedef struct _Buffer {
     
     RenderTexture2D renderTex;
     f32 viewLoc;
+    
+    Vector2 pos;
 } Buffer;
 
+typedef enum _EditorMode {
+    EMode_Normal,
+    EMode_Open,
+} EditorMode;
+
 typedef struct _Editor {
-    Buffer *buffers;
-    usize bufferCount;
-    usize bufferCap;
+    Buffer buffers[BUFFER_COUNT];
     
-    usize selectedBuffer;
+    Buffer *selectedBuffer;
+    
+    f32 width, height;
+    
+    Arena tempArena;
+    Arena actionArena;
+    
+    EditorMode mode;
 } Editor;
 
-Buffer InitBuffer(usize cap);
+Buffer InitBuffer(usize cap, f32 x, f32 y, f32 width, f32 height);
 void DeinitBuffer(Buffer *buffer);
 void InsertBuffer(Buffer *buffer, s32 codepoint);
 void BackspaceBuffer(Buffer *buffer);
@@ -59,7 +72,9 @@ s32 BufferSave(Buffer *buffer);
 void BufferFixCursorPos(Buffer *buffer);
 void BufferFixCursorLineCol(Buffer *buffer);
 
-void BufferHandleInput(Buffer *buffer);
+void HandleInput(Editor *ed);
+
+void UpdateViewport(Editor *ed, f32 width, f32 height);
 
 s32 main() {
     InitWindow(WIDTH, HEIGHT, "MCoder");
@@ -67,38 +82,45 @@ s32 main() {
     
     SetTargetFPS(60);
     
-    Buffer buffer = InitBuffer(KB(1));
+    Editor ed = {
+        .buffers = {
+            InitBuffer(KB(1), 0, 0, 400, 600),
+            InitBuffer(KB(1), 400, 0, 400, 600),
+        },
+        .tempArena = InitArena(TEMP_ARENA_SIZE),
+        .actionArena = InitArena(TEMP_ARENA_SIZE),
+    };
+    ed.selectedBuffer = &ed.buffers[0];
     
-    BufferOpenFile(&buffer, "main.c");
+    // BufferOpenFile(&buffer, "main.c");
     
     while (!WindowShouldClose()) {
-        if (IsWindowResized()) { 
-            UnloadRenderTexture(buffer.renderTex);
-            buffer.renderTex = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
-        }
+        if (IsWindowResized()) UpdateViewport(&ed, GetScreenWidth(), GetScreenHeight());
         
-        BufferHandleInput(&buffer);
+        HandleInput(&ed);
         
         BeginDrawing();
         
         ClearBackground(BLACK);
-               
-        DrawBuffer(&buffer);
         
-        // DrawTexture(buffer.renderTex.texture, 0, 0, WHITE);
-        DrawTextureRec(buffer.renderTex.texture, 
-                       (Rectangle) {0,0,buffer.renderTex.texture.width,-buffer.renderTex.texture.height}, 
-                       (Vector2) {0,0}, 
-                       WHITE); 
+        for (usize i=0;i<BUFFER_COUNT;i++) {  
+            DrawBuffer(ed.buffers+i);
+        }
+        
+        DrawBuffer(ed.selectedBuffer);
         
         EndDrawing();
+        
+        ResetArena(&ed.tempArena);
     }
     
-    DeinitBuffer(&buffer);
+    for (usize i=0;i<BUFFER_COUNT;i++)
+        DeinitBuffer(&ed.buffers[i]);
+    
     CloseWindow();
 }
 
-Buffer InitBuffer(usize cap) {
+Buffer InitBuffer(usize cap, f32 x, f32 y, f32 width, f32 height) {
     Buffer b = {
         // .font = GetFontDefault(),
         .font = LoadFont("assets/IosevkaFixed-Medium.ttf"),
@@ -118,7 +140,9 @@ Buffer InitBuffer(usize cap) {
         .tempArena = InitArena(TEMP_ARENA_SIZE),
         
         .path = "",
-        .renderTex = LoadRenderTexture(WIDTH, HEIGHT),
+        .renderTex = LoadRenderTexture(width, height),
+        
+        .pos = (Vector2){x,y},
     };
     
     SetTextureFilter(b.font.texture, TEXTURE_FILTER_ANISOTROPIC_8X);
@@ -252,10 +276,15 @@ void DrawBuffer(Buffer *buffer) {
              (Vector2){2*buffer->textSpacing, 
              buffer->renderTex.texture.height-(buffer->fontSize + buffer->textLineSpacing)}, 
              buffer->fontSize, buffer->textSpacing, BLACK);
-             
-    ResetArena(&buffer->tempArena);
     
     EndTextureMode();
+    
+    DrawTextureRec(buffer->renderTex.texture, 
+                           (Rectangle) {0,0,buffer->renderTex.texture.width,-buffer->renderTex.texture.height}, 
+                           buffer->pos, 
+                           WHITE);
+    
+    ResetArena(&buffer->tempArena);
 }
 
 void BufferFixCursorPos(Buffer *buffer) {
@@ -348,7 +377,9 @@ s32 BufferSave(Buffer *buffer) {
     printf("Saved in %.2f seconds.\n", elapsedTime);
 }
 
-void BufferHandleInput(Buffer *buffer) {
+void HandleInput(Editor *ed) {
+    Buffer *buffer = ed->selectedBuffer;
+    
     if (IsKeyPressed(KEY_LEFT) || IsKeyPressedRepeat(KEY_LEFT)) {
         if (buffer->cursorPos) {
             buffer->cursorPos--;
@@ -384,7 +415,13 @@ void BufferHandleInput(Buffer *buffer) {
     }
     
     if (IsKeyPressed(KEY_ENTER) || IsKeyPressedRepeat(KEY_ENTER)) {
-        InsertBuffer(buffer, '\n');
+        if (ed->mode == EMode_Open) {
+            char *filename = ArenaAlloc(&ed->tempArena, buffer->bufferLen+1);
+            for (usize i=0;i<buffer->bufferLen;++i) {
+                filename[i] = (char)buffer->buffer[i];
+            }
+            filename[buffer->bufferLen] = '\0';
+        } else InsertBuffer(buffer, '\n');
     }
     
     if (IsKeyPressed(KEY_TAB) || IsKeyPressedRepeat(KEY_TAB)) {
@@ -404,6 +441,14 @@ void BufferHandleInput(Buffer *buffer) {
             if (key == KEY_MINUS) {
                 buffer->fontSize-=4;
             }
+            if (key == KEY_O) {
+                ed->mode = EMode_Open;
+                
+                Buffer *tb = ArenaAlloc(&ed->actionArena, sizeof(Buffer));
+                *tb = InitBuffer(128, 200, 150, 400, 300);
+                
+                ed->selectedBuffer = tb;
+            }
         }
     } else {
         s32 c;
@@ -413,5 +458,13 @@ void BufferHandleInput(Buffer *buffer) {
     }
     
     Vector2 movement = GetMouseWheelMoveV();
-    buffer->viewLoc += -movement.y*10;
+    ed->selectedBuffer->viewLoc += -movement.y*10;
+}
+
+void UpdateViewport(Editor *ed, f32 width, f32 height) {
+    for (usize i=0;i<BUFFER_COUNT;i++) {
+        UnloadRenderTexture(ed->buffers[i].renderTex);
+        ed->buffers[i].renderTex = LoadRenderTexture(width, height);
+        // TODO(m1cha1s): Add some kind of layouts here. Will need a rework.
+    }
 }
