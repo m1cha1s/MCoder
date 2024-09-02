@@ -14,6 +14,11 @@
 #define BUFFER_COUNT 2
 #define TEMP_ARENA_SIZE KB(1)
 
+typedef enum _BufferMode {
+    BMode_Norm,
+    BMode_Open,
+} BufferMode;
+
 typedef struct _Buffer {
     Font font;
     f32 fontSize;
@@ -36,11 +41,13 @@ typedef struct _Buffer {
     
     FILE *file;
     char *path;
+    usize pathLen;
+    usize pathCap;
     
     RenderTexture2D renderTex;
     f32 viewLoc;
     
-    Vector2 pos;
+    BufferMode mode;
 } Buffer;
 
 typedef enum _EditorMode {
@@ -51,17 +58,14 @@ typedef enum _EditorMode {
 typedef struct _Editor {
     Buffer buffers[BUFFER_COUNT];
     
-    Buffer *selectedBuffer;
+    usize selectedBuffer;
     
     f32 width, height;
     
     Arena tempArena;
-    Arena actionArena;
-    
-    EditorMode mode;
 } Editor;
 
-Buffer InitBuffer(usize cap, f32 x, f32 y, f32 width, f32 height);
+Buffer InitBuffer(usize cap);
 void DeinitBuffer(Buffer *buffer);
 void InsertBuffer(Buffer *buffer, s32 codepoint);
 void BackspaceBuffer(Buffer *buffer);
@@ -84,13 +88,11 @@ s32 main() {
     
     Editor ed = {
         .buffers = {
-            InitBuffer(KB(1), 0, 0, 400, 600),
-            InitBuffer(KB(1), 400, 0, 400, 600),
+            InitBuffer(KB(1)),
+            InitBuffer(KB(1)),
         },
         .tempArena = InitArena(TEMP_ARENA_SIZE),
-        .actionArena = InitArena(TEMP_ARENA_SIZE),
     };
-    ed.selectedBuffer = &ed.buffers[0];
     
     // BufferOpenFile(&buffer, "main.c");
     
@@ -103,11 +105,7 @@ s32 main() {
         
         ClearBackground(BLACK);
         
-        for (usize i=0;i<BUFFER_COUNT;i++) {  
-            DrawBuffer(ed.buffers+i);
-        }
-        
-        DrawBuffer(ed.selectedBuffer);
+        DrawBuffer(ed.buffers+ed.selectedBuffer);
         
         EndDrawing();
         
@@ -120,10 +118,11 @@ s32 main() {
     CloseWindow();
 }
 
-Buffer InitBuffer(usize cap, f32 x, f32 y, f32 width, f32 height) {
+Buffer InitBuffer(usize cap) {
     Buffer b = {
         // .font = GetFontDefault(),
-        .font = LoadFont("assets/IosevkaFixed-Medium.ttf"),
+        // .font = LoadFont("assets/IosevkaFixed-Medium.ttf"),
+        .font = LoadFontEx("assets/IosevkaFixed-Medium.ttf", 128, NULL, 0),
         // .font = LoadFont("/System/Library/Fonts/Monaco.ttf"),
         // .font = LoadFontEx("/System/Library/Fonts/Monaco.ttf", 32, NULL, 0),
         .fontSize = 20,
@@ -139,10 +138,11 @@ Buffer InitBuffer(usize cap, f32 x, f32 y, f32 width, f32 height) {
         
         .tempArena = InitArena(TEMP_ARENA_SIZE),
         
-        .path = "",
-        .renderTex = LoadRenderTexture(width, height),
+        .path = malloc(8),
+        .pathLen = 0,
+        .pathCap = 8,
         
-        .pos = (Vector2){x,y},
+        .renderTex = LoadRenderTexture(GetScreenWidth(), GetScreenHeight()),
     };
     
     SetTextureFilter(b.font.texture, TEXTURE_FILTER_ANISOTROPIC_8X);
@@ -281,7 +281,7 @@ void DrawBuffer(Buffer *buffer) {
     
     DrawTextureRec(buffer->renderTex.texture, 
                            (Rectangle) {0,0,buffer->renderTex.texture.width,-buffer->renderTex.texture.height}, 
-                           buffer->pos, 
+                           (Vector2){0,0}, 
                            WHITE);
     
     ResetArena(&buffer->tempArena);
@@ -348,9 +348,7 @@ s32 BufferOpenFile(Buffer *buffer, char *path) {
     fread(fileContents, fileSize, 1, buffer->file);
     
     for (usize i=0;i<fileSize;) {
-        s32 codepointSize = 0;
-        InsertBuffer(buffer, GetCodepointNext(fileContents+i, &codepointSize));
-        i += codepointSize;
+        InsertBuffer(buffer, fileContents[i]);
     }
     
     fclose(buffer->file);
@@ -378,7 +376,7 @@ s32 BufferSave(Buffer *buffer) {
 }
 
 void HandleInput(Editor *ed) {
-    Buffer *buffer = ed->selectedBuffer;
+    Buffer *buffer = ed->buffers+ed->selectedBuffer;
     
     if (IsKeyPressed(KEY_LEFT) || IsKeyPressedRepeat(KEY_LEFT)) {
         if (buffer->cursorPos) {
@@ -415,13 +413,14 @@ void HandleInput(Editor *ed) {
     }
     
     if (IsKeyPressed(KEY_ENTER) || IsKeyPressedRepeat(KEY_ENTER)) {
-        if (ed->mode == EMode_Open) {
-            char *filename = ArenaAlloc(&ed->tempArena, buffer->bufferLen+1);
-            for (usize i=0;i<buffer->bufferLen;++i) {
-                filename[i] = (char)buffer->buffer[i];
-            }
-            filename[buffer->bufferLen] = '\0';
-        } else InsertBuffer(buffer, '\n');
+        switch (buffer->mode) {
+            case BMode_Norm: InsertBuffer(buffer, '\n'); break;
+            case BMode_Open: {
+                buffer->bufferLen = 0;
+                BufferOpenFile(buffer, buffer->path);
+                buffer->mode = BMode_Norm;
+            } break;
+        }
     }
     
     if (IsKeyPressed(KEY_TAB) || IsKeyPressedRepeat(KEY_TAB)) {
@@ -442,23 +441,32 @@ void HandleInput(Editor *ed) {
                 buffer->fontSize-=4;
             }
             if (key == KEY_O) {
-                ed->mode = EMode_Open;
-                
-                Buffer *tb = ArenaAlloc(&ed->actionArena, sizeof(Buffer));
-                *tb = InitBuffer(128, 200, 150, 400, 300);
-                
-                ed->selectedBuffer = tb;
+                buffer->mode = BMode_Open;
             }
         }
     } else {
         s32 c;
         if (c = GetCharPressed()) {
-            InsertBuffer(buffer, c);
+            switch (buffer->mode) {
+                case BMode_Norm: InsertBuffer(buffer, c); break;
+                case BMode_Open: {
+                    if (buffer->pathLen+1 > buffer->pathCap) {
+                        char *newPath = malloc(buffer->pathCap*2);
+                        // TODO(m1cha1s): Handle the failure. ^^^
+                        memmove(newPath, buffer->path, buffer->pathLen);
+                        free(buffer->path);
+                        buffer->path = newPath;
+                    } 
+                    
+                    buffer->path[buffer->pathLen++] = c;
+                } break;
+            }
+            
         }
     }
     
     Vector2 movement = GetMouseWheelMoveV();
-    ed->selectedBuffer->viewLoc += -movement.y*10;
+    ed->buffers[ed->selectedBuffer].viewLoc += -movement.y*10;
 }
 
 void UpdateViewport(Editor *ed, f32 width, f32 height) {
