@@ -200,6 +200,18 @@ void DrawBuffer(Buffer *buffer) {
             textOffset.y += (buffer->fontSize + buffer->textLineSpacing);
             textOffset.x = 0.0f;
         } else {
+            f32 newXOff = 0;
+            
+            if (buffer->font.glyphs[index].advanceX == 0) 
+                newXOff = ((f32)buffer->font.recs[index].width*scaleFactor + buffer->textSpacing);
+            else
+                newXOff = ((f32)buffer->font.glyphs[index].advanceX*scaleFactor + buffer->textSpacing);
+            
+            if (textOffset.x+newXOff > buffer->renderTex.texture.width) {
+                textOffset.x = 0;
+                textOffset.y += (buffer->fontSize + buffer->textLineSpacing);
+            }
+            
             if ((codepoint != ' ') && (codepoint != '\t')) {
                 DrawTextCodepoint(buffer->font,
                                   codepoint,
@@ -208,11 +220,8 @@ void DrawBuffer(Buffer *buffer) {
                                   WHITE);
             }
             
-            if (buffer->font.glyphs[index].advanceX == 0) 
-                textOffset.x += ((f32)buffer->font.recs[index].width*scaleFactor + buffer->textSpacing);
-            else
-                textOffset.x += ((f32)buffer->font.glyphs[index].advanceX*scaleFactor + buffer->textSpacing);
-        }
+            textOffset.x += newXOff;
+        }   
     }
     
     // Draw the status bar.
