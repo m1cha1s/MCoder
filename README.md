@@ -3,7 +3,7 @@ A handmade style code editor.
 
 ## TODO:
 - [ ] Mouse support.
-- [ ] Better font rendering.
+- [ ] Better font rendering. Attempt to use SDF rendering.
 - [ ] Opening files from the gui.
 - [ ] Scrolling around the file.
 - [ ] Line wrapping.

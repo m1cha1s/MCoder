@@ -70,7 +70,7 @@ void DeinitBuffer(Buffer *buffer);
 void InsertBuffer(Buffer *buffer, s32 codepoint);
 void BackspaceBuffer(Buffer *buffer);
 void DrawBuffer(Buffer *buffer);
-s32 BufferOpenFile(Buffer *buffer, char *path);
+s32 BufferOpenFile(Buffer *buffer);
 s32 BufferSave(Buffer *buffer);
 
 void BufferFixCursorPos(Buffer *buffer);
@@ -122,9 +122,9 @@ Buffer InitBuffer(usize cap) {
     Buffer b = {
         // .font = GetFontDefault(),
         // .font = LoadFont("assets/IosevkaFixed-Medium.ttf"),
-        .font = LoadFontEx("assets/IosevkaFixed-Medium.ttf", 128, NULL, 0),
+        // .font = LoadFontEx("assets/IosevkaFixed-Medium.ttf", 64, NULL, 0),
         // .font = LoadFont("/System/Library/Fonts/Monaco.ttf"),
-        // .font = LoadFontEx("/System/Library/Fonts/Monaco.ttf", 32, NULL, 0),
+        .font = LoadFontEx("/System/Library/Fonts/Monaco.ttf", 72, NULL, 0),
         .fontSize = 20,
         .fontSpacing = 3,
         
@@ -145,7 +145,7 @@ Buffer InitBuffer(usize cap) {
         .renderTex = LoadRenderTexture(GetScreenWidth(), GetScreenHeight()),
     };
     
-    SetTextureFilter(b.font.texture, TEXTURE_FILTER_ANISOTROPIC_8X);
+    SetTextureFilter(b.font.texture, TEXTURE_FILTER_ANISOTROPIC_16X);
     
     return b;
 }
@@ -330,12 +330,13 @@ void BufferFixCursorLineCol(Buffer *buffer) {
     }
 }
 
-s32 BufferOpenFile(Buffer *buffer, char *path) {
-    buffer->path = path;
+s32 BufferOpenFile(Buffer *buffer) {
+    char *path = tfmt(&buffer->tempArena, "%.*s", buffer->pathLen, buffer->path);
+    printf("%s\n", path);
     buffer->file = fopen(path, "r");
     
     if (!buffer->file) {
-        buffer->path = "";
+        buffer->pathLen = 0;
         return -1;
     }
     
@@ -427,7 +428,7 @@ void HandleInput(Editor *ed) {
             case BMode_Norm: InsertBuffer(buffer, '\n'); break;
             case BMode_Open: {
                 buffer->bufferLen = 0;
-                BufferOpenFile(buffer, buffer->path);
+                BufferOpenFile(buffer);
                 buffer->mode = BMode_Norm;
             } break;
         }
@@ -452,6 +453,7 @@ void HandleInput(Editor *ed) {
             }
             if (key == KEY_O) {
                 buffer->mode = BMode_Open;
+                buffer->pathLen = 0;
             }
         }
     } else {
