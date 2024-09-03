@@ -364,6 +364,7 @@ s32 BufferOpenFile(Buffer *buffer) {
 
     printf("%d\n", fileSize);
 
+    buffer->bufferLen = buffer->cursorPos = 0;
     for (usize i=0;i<fileSize; ) {
         printf("%d\n", i);
         s32 cps;
@@ -468,6 +469,21 @@ void HandleInput(Editor *ed) {
     if (IsKeyPressed(KEY_TAB) || IsKeyPressedRepeat(KEY_TAB)) {
         s32 spacesToInsert = 4-(buffer->cursorCol % 4);
         for (s32 i=0;i<spacesToInsert;++i) InsertBuffer(buffer, ' ');
+    }
+
+    if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+        Vector2 mPos = GetMousePosition();
+
+        f32 scaleFactor = buffer->fontSize/buffer->font.baseSize;
+
+        usize l = (usize)mPos.y / (buffer->fontSize+buffer->textLineSpacing);
+        usize c = (usize)mPos.x / ((f32)buffer->font.glyphs[0].advanceX*scaleFactor + buffer->textSpacing);
+
+        buffer->cursorLine = l;
+        buffer->cursorCol = c;
+
+        BufferFixCursorPos(buffer);
+        BufferFixCursorLineCol(buffer);
     }
 
     if (IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER)) {

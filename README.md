@@ -2,7 +2,7 @@
 A handmade style code editor.
 
 ## TODO:
-- [ ] Mouse support.
+- [x] Mouse support.
 - [x] Better font rendering. Attempt to use SDF rendering.
 - [x] Opening files from the gui.
 - [x] Scrolling around the file.
