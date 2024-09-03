@@ -11,6 +11,13 @@
 #include "utils.h"
 #include "arena.h"
 
+#define ARRAYLIST_T s32
+#include "arraylist.h"
+
+#define ARRAYLIST_T char
+#include "arraylist.h"
+
+
 #define FONT_BASE_SIZE 128
 
 #define WIDTH  800
@@ -34,9 +41,11 @@ typedef struct _Buffer {
     s32 textLineSpacing;
     f32 textSpacing;
 
-    s32 *buffer;
-    usize bufferLen;
-    usize bufferCap;
+    // s32 *buffer;
+    // usize bufferLen;
+    // usize bufferCap;
+    Arraylist_s32 buffer;
+
     usize bufferLines;
 
     usize cursorPos;
@@ -47,14 +56,14 @@ typedef struct _Buffer {
     Arena tempArena;
 
     FILE *file;
-    char *path;
-    usize pathLen;
-    usize pathCap;
+    Arraylist_char path;
 
     RenderTexture2D renderTex;
     f32 viewLoc;
 
     BufferMode mode;
+
+    Arraylist_char msg;
 } Buffer;
 
 typedef enum _EditorMode {
@@ -137,18 +146,16 @@ Buffer InitBuffer(usize cap) {
         .textLineSpacing = 2,
         .textSpacing = 3,
 
-        .buffer = malloc(cap*sizeof(s32)),
-        .bufferLen = 0,
-        .bufferCap = cap,
+        .buffer = Arraylist_s32_Init(cap),
         .cursorPos = 0,
 
         .tempArena = InitArena(TEMP_ARENA_SIZE),
 
-        .path = malloc(8),
-        .pathLen = 0,
-        .pathCap = 8,
+        .path = Arraylist_char_Init(8),
 
         .renderTex = LoadRenderTexture(GetScreenWidth(), GetScreenHeight()),
+
+        .msg = Arraylist_char_Init(8),
     };
 
     BufferLoadFont(&b, 20);
@@ -163,42 +170,23 @@ void DeinitBuffer(Buffer *buffer) {
 }
 
 void InsertBuffer(Buffer *buffer, s32 codepoint) {
-    if (buffer->bufferLen+1 > buffer->bufferCap) {
-        printf("Growing buffer...\n");
-        s32 *newBuffer = malloc(buffer->bufferCap*2*sizeof(s32));
-        if (!newBuffer) {
-            printf("Failed to resize buffer, out of memory!\n");
-            exit(-1);
-        }
-        memcpy(newBuffer, buffer->buffer, sizeof(s32)*buffer->bufferLen);
-        free(buffer->buffer);
-        buffer->buffer = newBuffer;
-        buffer->bufferCap *= 2;
-    }
-
     if (codepoint == '\n') buffer->bufferLines++;
 
-    memmove(buffer->buffer+buffer->cursorPos+1,
-            buffer->buffer+buffer->cursorPos,
-            (buffer->bufferLen-buffer->cursorPos)*sizeof(s32));
+    Arraylist_s32_Insert(&buffer->buffer, codepoint, buffer->cursorPos);
 
-    buffer->buffer[buffer->cursorPos++] = codepoint;
-    buffer->bufferLen++;
+    buffer->cursorPos++;
 
     BufferFixCursorLineCol(buffer);
 }
 
 void BackspaceBuffer(Buffer *buffer) {
-    if ((!buffer->cursorPos) || (!buffer->bufferLen)) return;
+    if ((!buffer->cursorPos) || (!buffer->buffer.len)) return;
 
-    if (buffer->buffer[buffer->cursorPos-1] == '\n') buffer->bufferLines--;
-
-    memmove(buffer->buffer+buffer->cursorPos-1,
-            buffer->buffer+buffer->cursorPos,
-            (buffer->bufferLen-buffer->cursorPos)*sizeof(s32));
+    if (buffer->buffer.array[buffer->cursorPos-1] == '\n') buffer->bufferLines--;
 
     buffer->cursorPos--;
-    buffer->bufferLen--;
+
+    Arraylist_s32_Remove(&buffer->buffer, buffer->cursorPos);
 
     BufferFixCursorLineCol(buffer);
 }
@@ -210,12 +198,12 @@ void DrawBuffer(Buffer *buffer) {
 
     f32 scaleFactor = buffer->fontSize/buffer->font.baseSize;
 
-    for (usize i=0; i < buffer->bufferLen+1; ++i) {
+    for (usize i=0; i < buffer->buffer.len+1; ++i) {
         s32 codepoint = 0;
         s32 index = 0;
 
-        if (i < buffer->bufferLen) {
-            codepoint = buffer->buffer[i];
+        if (i < buffer->buffer.len) {
+            codepoint = buffer->buffer.array[i];
             index = GetGlyphIndex(buffer->font, codepoint);
         }
 
@@ -226,7 +214,7 @@ void DrawBuffer(Buffer *buffer) {
                            PINK);
         }
 
-        if (i >= buffer->bufferLen) continue;
+        if (i >= buffer->buffer.len) continue;
 
         if (codepoint == '\n') {
             textOffset.y += (buffer->fontSize + buffer->textLineSpacing);
@@ -280,12 +268,23 @@ void DrawBuffer(Buffer *buffer) {
              buffer->fontSize, buffer->textSpacing, BLACK);
     EndShaderMode();
 
-    char *pathText = tfmt(&buffer->tempArena, "Path: %.*s", buffer->pathLen, buffer->path);
+    char *pathText = tfmt(&buffer->tempArena, "<%.*s>", buffer->path.len, buffer->path.array);
 
     mt = MeasureTextEx(buffer->font, pathText, buffer->fontSize, buffer->textSpacing);
 
     BeginShaderMode(buffer->shader);
     DrawTextEx(buffer->font, pathText,
+             (Vector2){2*buffer->textSpacing+(buffer->renderTex.texture.width/2)-(mt.x/2),
+             buffer->renderTex.texture.height-(buffer->fontSize + buffer->textLineSpacing)},
+             buffer->fontSize, buffer->textSpacing, BLACK);
+    EndShaderMode();
+
+    char *msgText = tfmt(&buffer->tempArena, "%.*s", buffer->msg.len, buffer->msg.array);
+
+    mt = MeasureTextEx(buffer->font, pathText, buffer->fontSize, buffer->textSpacing);
+
+    BeginShaderMode(buffer->shader);
+    DrawTextEx(buffer->font, msgText,
              (Vector2){2*buffer->textSpacing,
              buffer->renderTex.texture.height-(buffer->fontSize + buffer->textLineSpacing)},
              buffer->fontSize, buffer->textSpacing, BLACK);
@@ -304,19 +303,19 @@ void DrawBuffer(Buffer *buffer) {
 void BufferFixCursorPos(Buffer *buffer) {
     usize l=0, c=0;
 
-    for (usize i=0; i < buffer->bufferLen+1; ++i) {
+    for (usize i=0; i < buffer->buffer.len+1; ++i) {
         if (l==buffer->cursorLine && c==buffer->cursorCol) {
             buffer->cursorPos = i;
             return;
         }
 
-        if (i < buffer->bufferLen) {
-            if (buffer->buffer[i] == '\n' && l==buffer->cursorLine) {
+        if (i < buffer->buffer.len) {
+            if (buffer->buffer.array[i] == '\n' && l==buffer->cursorLine) {
                 buffer->cursorPos = i;
                 return;
             }
 
-            if (buffer->buffer[i] == '\n' && l!=buffer->cursorLine) {
+            if (buffer->buffer.array[i] == '\n' && l!=buffer->cursorLine) {
                 l++;
                 c=0;
                 continue;
@@ -337,7 +336,7 @@ void BufferFixCursorLineCol(Buffer *buffer) {
     buffer->cursorCol  = 0;
     for (usize i=0; i < buffer->cursorPos; ++i) {
 
-        if (buffer->buffer[i] == '\n' && i!=buffer->cursorPos) {
+        if (buffer->buffer.array[i] == '\n' && i!=buffer->cursorPos) {
             buffer->cursorLine++;
             buffer->cursorCol=0;
         } else buffer->cursorCol++;
@@ -345,12 +344,16 @@ void BufferFixCursorLineCol(Buffer *buffer) {
 }
 
 s32 BufferOpenFile(Buffer *buffer) {
-    char *path = tfmt(&buffer->tempArena, "%.*s", buffer->pathLen, buffer->path);
-    printf("%s\n", path);
+    f64 startTime = GetTime();
+
+    char *path = tfmt(&buffer->tempArena, "%.*s", buffer->path.len, buffer->path.array);
     buffer->file = fopen(path, "r");
 
     if (!buffer->file) {
-        buffer->pathLen = 0;
+        buffer->path.len = 0;
+        char * msg = tfmt(&buffer->tempArena, "%s not found", path);
+        buffer->msg.len=0;
+        for (usize i=0;i<strlen(msg);++i) Arraylist_char_Push(&buffer->msg, msg[i]);
         return -1;
     }
 
@@ -362,11 +365,8 @@ s32 BufferOpenFile(Buffer *buffer) {
 
     fread(fileContents, fileSize, 1, buffer->file);
 
-    printf("%d\n", fileSize);
-
-    buffer->bufferLen = buffer->cursorPos = 0;
+    buffer->buffer.len = buffer->cursorPos = 0;
     for (usize i=0;i<fileSize; ) {
-        printf("%d\n", i);
         s32 cps;
         InsertBuffer(buffer, GetCodepointNext(fileContents+i, &cps));
         i+=cps;
@@ -376,24 +376,40 @@ s32 BufferOpenFile(Buffer *buffer) {
 
     buffer->cursorPos = 0;
     BufferFixCursorLineCol(buffer);
+
+    f64 elapsedTime = GetTime()-startTime;
+
+    char * msg = tfmt(&buffer->tempArena, "Opened (%.2fs)", elapsedTime);
+    buffer->msg.len=0;
+    for (usize i=0;i<strlen(msg);++i) Arraylist_char_Push(&buffer->msg, msg[i]);
 }
 
 s32 BufferSave(Buffer *buffer) {
     f64 startTime = GetTime();
-    buffer->file = fopen(buffer->path, "w");
 
-    for (usize i=0;i<buffer->bufferLen;++i) {
+    char *path = tfmt(&buffer->tempArena, "%.*s", buffer->path.len, buffer->path.array);
+    buffer->file = fopen(path, "w");
+
+    if (!buffer->file) {
+        char * msg = tfmt(&buffer->tempArena, "%s not found", path);
+        buffer->msg.len=0;
+        for (usize i=0;i<strlen(msg);++i) Arraylist_char_Push(&buffer->msg, msg[i]);
+        return -1;
+    }
+
+    for (usize i=0;i<buffer->buffer.len;++i) {
         s32 size = 0;
-        char *utf8 = CodepointToUTF8(buffer->buffer[i], &size);
+        char *utf8 = CodepointToUTF8(buffer->buffer.array[i], &size);
         usize wsize = fwrite(utf8, size, 1, buffer->file);
-
-        // printf("%d\n", wsize);
     }
 
     fclose(buffer->file);
 
     f64 elapsedTime = GetTime()-startTime;
-    printf("Saved in %.2f seconds.\n", elapsedTime);
+
+    char * msg = tfmt(&buffer->tempArena, "Saved (%.2fs)", elapsedTime);
+    buffer->msg.len=0;
+    for (usize i=0;i<strlen(msg);++i) Arraylist_char_Push(&buffer->msg, msg[i]);
 }
 
 void BufferLoadFont(Buffer *buffer, s32 size) {
@@ -423,7 +439,7 @@ void HandleInput(Editor *ed) {
         }
     }
     if (IsKeyPressed(KEY_RIGHT) || IsKeyPressedRepeat(KEY_RIGHT)) {
-        if (buffer->cursorPos < buffer->bufferLen) {
+        if (buffer->cursorPos < buffer->buffer.len) {
             buffer->cursorPos++;
             BufferFixCursorLineCol(buffer);
         }
@@ -445,13 +461,13 @@ void HandleInput(Editor *ed) {
         switch (buffer->mode) {
             case BMode_Norm: BackspaceBuffer(buffer); break;
             case BMode_Open: {
-                if (buffer->pathLen) buffer->pathLen--;
+                if (buffer->path.len) buffer->path.len--;
             } break;
         }
     }
 
     if (IsKeyPressed(KEY_DELETE) || IsKeyPressedRepeat(KEY_DELETE)) {
-        if (buffer->cursorPos < buffer->bufferLen) buffer->cursorPos++;
+        if (buffer->cursorPos < buffer->buffer.len) buffer->cursorPos++;
         BackspaceBuffer(buffer);
     }
 
@@ -459,7 +475,7 @@ void HandleInput(Editor *ed) {
         switch (buffer->mode) {
             case BMode_Norm: InsertBuffer(buffer, '\n'); break;
             case BMode_Open: {
-                buffer->bufferLen = 0;
+                buffer->buffer.len = 0;
                 BufferOpenFile(buffer);
                 buffer->mode = BMode_Norm;
             } break;
@@ -476,7 +492,7 @@ void HandleInput(Editor *ed) {
 
         f32 scaleFactor = buffer->fontSize/buffer->font.baseSize;
 
-        usize l = (usize)mPos.y / (buffer->fontSize+buffer->textLineSpacing);
+        usize l = (usize)(mPos.y+buffer->viewLoc) / (buffer->fontSize+buffer->textLineSpacing);
         usize c = (usize)mPos.x / ((f32)buffer->font.glyphs[0].advanceX*scaleFactor + buffer->textSpacing);
 
         buffer->cursorLine = l;
@@ -488,7 +504,7 @@ void HandleInput(Editor *ed) {
 
     if (IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER)) {
         s32 key;
-        if (key = GetKeyPressed()) {
+        if ((key = GetKeyPressed())) {
             if (key == KEY_S) {
                 BufferSave(buffer);
             }
@@ -504,24 +520,20 @@ void HandleInput(Editor *ed) {
             }
             if (key == KEY_O) {
                 buffer->mode = BMode_Open;
-                buffer->pathLen = 0;
+                buffer->path.len = 0;
+
+                char * msg = tfmt(&buffer->tempArena, "Specify path");
+                buffer->msg.len=0;
+                for (usize i=0;i<strlen(msg);++i) Arraylist_char_Push(&buffer->msg, msg[i]);
             }
         }
     } else {
         s32 c;
-        if (c = GetCharPressed()) {
+        if ((c = GetCharPressed())) {
             switch (buffer->mode) {
                 case BMode_Norm: InsertBuffer(buffer, c); break;
                 case BMode_Open: {
-                    if (buffer->pathLen+1 > buffer->pathCap) {
-                        char *newPath = malloc(buffer->pathCap*2);
-                        // TODO(m1cha1s): Handle the failure. ^^^
-                        memmove(newPath, buffer->path, buffer->pathLen);
-                        free(buffer->path);
-                        buffer->path = newPath;
-                    }
-
-                    buffer->path[buffer->pathLen++] = c;
+                    Arraylist_char_Push(&buffer->path, c);
                 } break;
             }
 
