@@ -10,3 +10,17 @@ A handmade style code editor.
 - [ ] Multi buffer support.
 - [ ] Scripting in C (using TCC).
 - [ ] Build "system", like compile mode in emacs or the build thing in focus.
+
+## Building
+```sh
+make build
+```
+
+## Running
+```sh
+make run
+```
+
+## Controlls
+- `Ctrl-o` open file
+- `Ctrl-s` save file
