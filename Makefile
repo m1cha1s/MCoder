@@ -20,15 +20,15 @@ endif
 
 EXE := MCoder
 
-SRC := $(shell find . -depth 1 -name "*.c")
+SRC := $(shell find . -maxdepth 1 -name "*.c")
 
 $(EXE): $(SRC) raylib/src/libraylib.a
 	$(CC) $^ -o $@ $(CFLAGS) $(LDFLAGS)
 
-raylib/src/libraylib.a: raylib
+raylib/src/libraylib.a: raylib/src
 	$(MAKE) -C raylib/src PLATFORM=PLATFORM_DESKTOP -j
 
-raylib:
+raylib/src:
 	git submodule update --init --recursive
 
 .PHONY: clean build run
