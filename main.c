@@ -268,7 +268,7 @@ void DrawBuffer(Buffer *buffer) {
              buffer->renderTex.texture.height-(buffer->fontSize + buffer->textLineSpacing)}, 
              buffer->fontSize, buffer->textSpacing, BLACK);
              
-    char *pathText = tfmt(&buffer->tempArena, "Path: %s", buffer->path);
+    char *pathText = tfmt(&buffer->tempArena, "Path: %.*s", buffer->pathLen, buffer->path);
     
     mt = MeasureTextEx(buffer->font, pathText, buffer->fontSize, buffer->textSpacing);
       
@@ -347,8 +347,13 @@ s32 BufferOpenFile(Buffer *buffer, char *path) {
     
     fread(fileContents, fileSize, 1, buffer->file);
     
-    for (usize i=0;i<fileSize;) {
-        InsertBuffer(buffer, fileContents[i]);
+    printf("%d\n", fileSize);
+    
+    for (usize i=0;i<fileSize; ) {
+        printf("%d\n", i);
+        s32 cps;
+        InsertBuffer(buffer, GetCodepointNext(fileContents+i, &cps));
+        i+=cps;
     }
     
     fclose(buffer->file);
@@ -404,7 +409,12 @@ void HandleInput(Editor *ed) {
     }
     
     if (IsKeyPressed(KEY_BACKSPACE) || IsKeyPressedRepeat(KEY_BACKSPACE)) {
-        BackspaceBuffer(buffer);
+        switch (buffer->mode) {
+            case BMode_Norm: BackspaceBuffer(buffer); break;
+            case BMode_Open: {
+                if (buffer->pathLen) buffer->pathLen--;
+            } break;
+        }
     }
     
     if (IsKeyPressed(KEY_DELETE) || IsKeyPressedRepeat(KEY_DELETE)) {
