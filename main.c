@@ -1,3 +1,4 @@
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,6 +8,8 @@
 
 #include "utils.h"
 #include "arena.h"
+
+#define FONT_BASE_SIZE 64
 
 #define WIDTH  800
 #define HEIGHT 600
@@ -23,6 +26,7 @@ typedef struct _Buffer {
     Font font;
     f32 fontSize;
     f32 fontSpacing;
+    Shader shader;
     
     s32 textLineSpacing;
     f32 textSpacing;
@@ -124,9 +128,10 @@ Buffer InitBuffer(usize cap) {
         // .font = LoadFont("assets/IosevkaFixed-Medium.ttf"),
         // .font = LoadFontEx("assets/IosevkaFixed-Medium.ttf", 64, NULL, 0),
         // .font = LoadFont("/System/Library/Fonts/Monaco.ttf"),
-        .font = LoadFontEx("/System/Library/Fonts/Monaco.ttf", 72, NULL, 0),
+        // .font = LoadFontEx("/System/Library/Fonts/Monaco.ttf", 72, NULL, 0),
         .fontSize = 20,
         .fontSpacing = 3,
+        .shader = LoadShader(NULL, "sdf.fs"),
         
         .textLineSpacing = 2,
         .textSpacing = 3,
@@ -145,13 +150,26 @@ Buffer InitBuffer(usize cap) {
         .renderTex = LoadRenderTexture(GetScreenWidth(), GetScreenHeight()),
     };
     
-    SetTextureFilter(b.font.texture, TEXTURE_FILTER_ANISOTROPIC_16X);
+    s32 fdSize = 0;
+    char* fd = LoadFileData("assets/IosevkaFixed-Medium.ttf", &fdSize);
+    
+    b.font.baseSize = FONT_BASE_SIZE;
+    b.font.glyphCount = 95;
+    b.font.glyphs = LoadFontData(fd, fdSize, FONT_BASE_SIZE, 0, 0, FONT_SDF);
+    
+    Image atlas = GenImageFontAtlas(b.font.glyphs, &b.font.recs, 95, FONT_BASE_SIZE, 0, 1);
+    b.font.texture = LoadTextureFromImage(atlas);
+    UnloadImage(atlas);
+    UnloadFileData(fd);
+    
+    SetTextureFilter(b.font.texture, TEXTURE_FILTER_BILINEAR);
     
     return b;
 }
 
 void DeinitBuffer(Buffer *buffer) {
     UnloadFont(buffer->font);
+    UnloadShader(buffer->shader);
     DeinitArena(&buffer->tempArena);
 }
 
@@ -241,11 +259,13 @@ void DrawBuffer(Buffer *buffer) {
                 (codepoint != '\t') && 
                 (textOffset.y >= 0) && 
                 ((textOffset.y+buffer->fontSize) <= buffer->renderTex.texture.height)) {
+                BeginShaderMode(buffer->shader);
                 DrawTextCodepoint(buffer->font,
                                   codepoint,
                                   textOffset,
                                   buffer->fontSize,
                                   WHITE);
+                EndShaderMode();
             }
             
             textOffset.x += newXOff;
