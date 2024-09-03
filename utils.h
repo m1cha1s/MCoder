@@ -13,6 +13,11 @@ typedef ssize_t ssize;
 typedef float f32;
 typedef double f64;
 
+#define true 1
+#define false 0
+
+typedef u8 b8;
+
 #define _GLUE(a,b) a##b
 #define GLUE(a,b) _GLUE(a,b)
 
@@ -24,7 +29,7 @@ typedef double f64;
 
 char *tfmt(Arena *arena, const char * format, ...);
 
-s32 DrawFText(Arena *arena, u32 x, u32 y, u32 size, Color c, const char * format, ...);
+// s32 DrawFText(Arena *arena, u32 x, u32 y, u32 size, Color c, const char * format, ...);
 
 #if defined(IMPLS)
 
@@ -47,24 +52,24 @@ char *tfmt(Arena *arena, const char * format, ...) {
     return buffer;
 }
 
-#include <raylib.h>
+// #include <raylib.h>
 
-s32 DrawFText(Arena *arena, u32 x, u32 y, u32 size, Color c, const char * format, ...) {
-    va_list ptr;
-    va_start(ptr, format);
-    usize len = vsnprintf(NULL, 0, format, ptr);
-    va_end(ptr);
-
-    char *buffer = ArenaAlloc(arena, len+1);
-
-    if (!buffer) return -1;
-
-    va_start(ptr, format);
-    vsnprintf(buffer, len+1, format, ptr);
-    va_end(ptr);
-
-    DrawText(buffer, x, y, size, c);
-}
+// s32 DrawFText(Arena *arena, u32 x, u32 y, u32 size, Color c, const char * format, ...) {
+//     va_list ptr;
+//     va_start(ptr, format);
+//     usize len = vsnprintf(NULL, 0, format, ptr);
+//     va_end(ptr);
+//
+//     char *buffer = ArenaAlloc(arena, len+1);
+//
+//     if (!buffer) return -1;
+//
+//     va_start(ptr, format);
+//     vsnprintf(buffer, len+1, format, ptr);
+//     va_end(ptr);
+//
+//     DrawText(buffer, x, y, size, c);
+// }
 
 #endif
 

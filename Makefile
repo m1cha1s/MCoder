@@ -2,18 +2,18 @@ ifeq ($(OS),Windows_NT)   # WARNING: Not tested.
     CC := cl
     MAKE := nmake
     # This is surely wrong.
-    CFLAGS := -O2 -g -I raylib/src
+    CFLAGS := -O2 -g -I SDL/include
 else
     detected_OS := $(shell uname)  # same as "uname -s"
 
     CC := cc
     MAKE := make
-    CFLAGS := -O2 -g -I raylib/src
+    CFLAGS := -O2 -g -I SDL/include
 
     ifeq ($(detected_OS),Darwin)
-   		LDFLAGS := -framework Cocoa -framework IOKit -framework CoreFoundation
+	LDFLAGS := -framework Cocoa -framework IOKit -framework CoreFoundation
     else
-    	LDFLAGS := -lGL -lm -lpthread -ldl -lrt -lX11
+    	LDFLAGS := -lm
     endif
 endif
 
@@ -21,14 +21,19 @@ endif
 EXE := MCoder
 
 SRC := $(shell find . -maxdepth 1 -name "*.c")
+OBJ := $(SRC:.c=.o)
 
-$(EXE): $(SRC) raylib/src/libraylib.a
-	$(CC) $^ -o $@ $(CFLAGS) $(LDFLAGS)
+$(EXE): $(OBJ) build/libSDL2.a
+	$(CC) $^ -o $@ $(LDFLAGS)
 
-raylib/src/libraylib.a: raylib/src
-	$(MAKE) -C raylib/src PLATFORM=PLATFORM_DESKTOP -j
+%.o: %.c
+	$(CC) $< -c -o $@ $(CFLAGS)
 
-raylib/src:
+build/libSDL2.a: SDL/src
+	cmake -DSDL_STATIC=ON -DSDL_SHARED=OFF -S SDL -B build
+	cmake --build build
+
+SDL/src:
 	git submodule update --init --recursive
 
 .PHONY: clean build run
