@@ -1,4 +1,5 @@
 
+#include "raylib/src/raylib.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,6 +25,7 @@ typedef enum _BufferMode {
 } BufferMode;
 
 typedef struct _Buffer {
+    char *fontPath;
     Font font;
     f32 fontSize;
     f32 fontSpacing;
@@ -77,6 +79,7 @@ void BackspaceBuffer(Buffer *buffer);
 void DrawBuffer(Buffer *buffer);
 s32 BufferOpenFile(Buffer *buffer);
 s32 BufferSave(Buffer *buffer);
+void BufferLoadFont(Buffer *buffer, s32 size);
 
 void BufferFixCursorPos(Buffer *buffer);
 void BufferFixCursorLineCol(Buffer *buffer);
@@ -125,11 +128,8 @@ s32 main() {
 
 Buffer InitBuffer(usize cap) {
     Buffer b = {
-        // .font = GetFontDefault(),
-        // .font = LoadFont("assets/IosevkaFixed-Medium.ttf"),
-        // .font = LoadFontEx("assets/IosevkaFixed-Medium.ttf", 64, NULL, 0),
-        // .font = LoadFont("/System/Library/Fonts/Monaco.ttf"),
-        // .font = LoadFontEx("/System/Library/Fonts/Monaco.ttf", 72, NULL, 0),
+        // .fontPath = "/System/Library/Fonts/Monaco.ttf",
+        .fontPath = "assets/IosevkaFixed-Medium.ttf",
         .fontSize = 20,
         .fontSpacing = 3,
         .shader = LoadShader(NULL, "sdf.fs"),
@@ -151,20 +151,7 @@ Buffer InitBuffer(usize cap) {
         .renderTex = LoadRenderTexture(GetScreenWidth(), GetScreenHeight()),
     };
 
-    s32 fdSize = 0;
-    // char *fd = LoadFileData("assets/IosevkaFixed-Medium.ttf", &fdSize);
-    char *fd = LoadFileData("/System/Library/Fonts/Monaco.ttf", &fdSize);
-
-    b.font.baseSize = FONT_BASE_SIZE;
-    b.font.glyphCount = 95;
-    b.font.glyphs = LoadFontData(fd, fdSize, FONT_BASE_SIZE, 0, 0, FONT_SDF);
-
-    Image atlas = GenImageFontAtlas(b.font.glyphs, &b.font.recs, 95, FONT_BASE_SIZE, 0, 1);
-    b.font.texture = LoadTextureFromImage(atlas);
-    UnloadImage(atlas);
-    UnloadFileData(fd);
-
-    SetTextureFilter(b.font.texture, TEXTURE_FILTER_BILINEAR);
+    BufferLoadFont(&b, 20);
 
     return b;
 }
@@ -259,7 +246,7 @@ void DrawBuffer(Buffer *buffer) {
 
             if ((codepoint != ' ') &&
                 (codepoint != '\t') &&
-                (textOffset.y >= 0) &&
+                (textOffset.y >= -buffer->fontSize) &&
                 ((textOffset.y+buffer->fontSize) <= buffer->renderTex.texture.height)) {
                 Vector2 pos = {floor(textOffset.x), floor(textOffset.y)};
 
@@ -286,20 +273,23 @@ void DrawBuffer(Buffer *buffer) {
 
     // DrawFText(&buffer->tempArena,
     //           400, 300, 20, PINK, "mt: (%.4f,%.4f)", mt.x, mt.y);
-
+    BeginShaderMode(buffer->shader);
     DrawTextEx(buffer->font, lcText,
              (Vector2){buffer->renderTex.texture.width-(mt.x + 2*buffer->textSpacing),
              buffer->renderTex.texture.height-(buffer->fontSize + buffer->textLineSpacing)},
              buffer->fontSize, buffer->textSpacing, BLACK);
+    EndShaderMode();
 
     char *pathText = tfmt(&buffer->tempArena, "Path: %.*s", buffer->pathLen, buffer->path);
 
     mt = MeasureTextEx(buffer->font, pathText, buffer->fontSize, buffer->textSpacing);
 
+    BeginShaderMode(buffer->shader);
     DrawTextEx(buffer->font, pathText,
              (Vector2){2*buffer->textSpacing,
              buffer->renderTex.texture.height-(buffer->fontSize + buffer->textLineSpacing)},
              buffer->fontSize, buffer->textSpacing, BLACK);
+    EndShaderMode();
 
     EndTextureMode();
 
@@ -405,6 +395,23 @@ s32 BufferSave(Buffer *buffer) {
     printf("Saved in %.2f seconds.\n", elapsedTime);
 }
 
+void BufferLoadFont(Buffer *buffer, s32 size) {
+    s32 fdSize = 0;
+    // char *fd = LoadFileData("assets/IosevkaFixed-Medium.ttf", &fdSize);
+    char *fd = LoadFileData(buffer->fontPath, &fdSize);
+
+    buffer->font.baseSize = size;
+    buffer->font.glyphCount = 95;
+    buffer->font.glyphs = LoadFontData(fd, fdSize, size, 0, 0, FONT_SDF);
+
+    Image atlas = GenImageFontAtlas(buffer->font.glyphs, &buffer->font.recs, 95, size, 0, 1);
+    buffer->font.texture = LoadTextureFromImage(atlas);
+    UnloadImage(atlas);
+    UnloadFileData(fd);
+
+    SetTextureFilter(buffer->font.texture, TEXTURE_FILTER_BILINEAR);
+}
+
 void HandleInput(Editor *ed) {
     Buffer *buffer = ed->buffers+ed->selectedBuffer;
 
@@ -471,9 +478,13 @@ void HandleInput(Editor *ed) {
             }
             if (key == KEY_EQUAL) {
                 buffer->fontSize+=4;
+                UnloadFont(buffer->font);
+                BufferLoadFont(buffer, buffer->fontSize);
             }
             if (key == KEY_MINUS) {
                 buffer->fontSize-=4;
+                UnloadFont(buffer->font);
+                BufferLoadFont(buffer, buffer->fontSize);
             }
             if (key == KEY_O) {
                 buffer->mode = BMode_Open;
@@ -502,7 +513,10 @@ void HandleInput(Editor *ed) {
     }
 
     Vector2 movement = GetMouseWheelMoveV();
-    ed->buffers[ed->selectedBuffer].viewLoc += -movement.y*10;
+    buffer->viewLoc += -movement.y*10;
+    if (buffer->viewLoc > buffer->bufferLines * (buffer->fontSize+buffer->textLineSpacing))
+        buffer->viewLoc=buffer->bufferLines * (buffer->fontSize+buffer->textLineSpacing);
+    if (buffer->viewLoc < 0) buffer->viewLoc=0;
 }
 
 void UpdateViewport(Editor *ed, f32 width, f32 height) {
