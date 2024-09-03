@@ -3,13 +3,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <raylib.h>
+#include <math.h>
 
 #define IMPLS
 
 #include "utils.h"
 #include "arena.h"
 
-#define FONT_BASE_SIZE 64
+#define FONT_BASE_SIZE 128
 
 #define WIDTH  800
 #define HEIGHT 600
@@ -27,30 +28,30 @@ typedef struct _Buffer {
     f32 fontSize;
     f32 fontSpacing;
     Shader shader;
-    
+
     s32 textLineSpacing;
     f32 textSpacing;
-    
+
     s32 *buffer;
     usize bufferLen;
     usize bufferCap;
     usize bufferLines;
-    
+
     usize cursorPos;
-    
+
     usize cursorLine;
     usize cursorCol;
-    
+
     Arena tempArena;
-    
+
     FILE *file;
     char *path;
     usize pathLen;
     usize pathCap;
-    
+
     RenderTexture2D renderTex;
     f32 viewLoc;
-    
+
     BufferMode mode;
 } Buffer;
 
@@ -61,11 +62,11 @@ typedef enum _EditorMode {
 
 typedef struct _Editor {
     Buffer buffers[BUFFER_COUNT];
-    
+
     usize selectedBuffer;
-    
+
     f32 width, height;
-    
+
     Arena tempArena;
 } Editor;
 
@@ -87,9 +88,9 @@ void UpdateViewport(Editor *ed, f32 width, f32 height);
 s32 main() {
     InitWindow(WIDTH, HEIGHT, "MCoder");
     SetWindowState(FLAG_WINDOW_RESIZABLE);
-    
+
     SetTargetFPS(60);
-    
+
     Editor ed = {
         .buffers = {
             InitBuffer(KB(1)),
@@ -97,28 +98,28 @@ s32 main() {
         },
         .tempArena = InitArena(TEMP_ARENA_SIZE),
     };
-    
+
     // BufferOpenFile(&buffer, "main.c");
-    
+
     while (!WindowShouldClose()) {
         if (IsWindowResized()) UpdateViewport(&ed, GetScreenWidth(), GetScreenHeight());
-        
+
         HandleInput(&ed);
-        
+
         BeginDrawing();
-        
+
         ClearBackground(BLACK);
-        
+
         DrawBuffer(ed.buffers+ed.selectedBuffer);
-        
+
         EndDrawing();
-        
+
         ResetArena(&ed.tempArena);
     }
-    
+
     for (usize i=0;i<BUFFER_COUNT;i++)
         DeinitBuffer(&ed.buffers[i]);
-    
+
     CloseWindow();
 }
 
@@ -132,38 +133,39 @@ Buffer InitBuffer(usize cap) {
         .fontSize = 20,
         .fontSpacing = 3,
         .shader = LoadShader(NULL, "sdf.fs"),
-        
+
         .textLineSpacing = 2,
         .textSpacing = 3,
-        
+
         .buffer = malloc(cap*sizeof(s32)),
         .bufferLen = 0,
         .bufferCap = cap,
         .cursorPos = 0,
-        
+
         .tempArena = InitArena(TEMP_ARENA_SIZE),
-        
+
         .path = malloc(8),
         .pathLen = 0,
         .pathCap = 8,
-        
+
         .renderTex = LoadRenderTexture(GetScreenWidth(), GetScreenHeight()),
     };
-    
+
     s32 fdSize = 0;
-    char* fd = LoadFileData("assets/IosevkaFixed-Medium.ttf", &fdSize);
-    
+    // char *fd = LoadFileData("assets/IosevkaFixed-Medium.ttf", &fdSize);
+    char *fd = LoadFileData("/System/Library/Fonts/Monaco.ttf", &fdSize);
+
     b.font.baseSize = FONT_BASE_SIZE;
     b.font.glyphCount = 95;
     b.font.glyphs = LoadFontData(fd, fdSize, FONT_BASE_SIZE, 0, 0, FONT_SDF);
-    
+
     Image atlas = GenImageFontAtlas(b.font.glyphs, &b.font.recs, 95, FONT_BASE_SIZE, 0, 1);
     b.font.texture = LoadTextureFromImage(atlas);
     UnloadImage(atlas);
     UnloadFileData(fd);
-    
+
     SetTextureFilter(b.font.texture, TEXTURE_FILTER_BILINEAR);
-    
+
     return b;
 }
 
@@ -186,31 +188,31 @@ void InsertBuffer(Buffer *buffer, s32 codepoint) {
         buffer->buffer = newBuffer;
         buffer->bufferCap *= 2;
     }
-    
+
     if (codepoint == '\n') buffer->bufferLines++;
-    
+
     memmove(buffer->buffer+buffer->cursorPos+1,
             buffer->buffer+buffer->cursorPos,
             (buffer->bufferLen-buffer->cursorPos)*sizeof(s32));
-            
+
     buffer->buffer[buffer->cursorPos++] = codepoint;
     buffer->bufferLen++;
-    
+
     BufferFixCursorLineCol(buffer);
 }
 
 void BackspaceBuffer(Buffer *buffer) {
     if ((!buffer->cursorPos) || (!buffer->bufferLen)) return;
-    
+
     if (buffer->buffer[buffer->cursorPos-1] == '\n') buffer->bufferLines--;
-    
+
     memmove(buffer->buffer+buffer->cursorPos-1,
             buffer->buffer+buffer->cursorPos,
             (buffer->bufferLen-buffer->cursorPos)*sizeof(s32));
-    
+
     buffer->cursorPos--;
     buffer->bufferLen--;
-    
+
     BufferFixCursorLineCol(buffer);
 }
 
@@ -218,110 +220,112 @@ void DrawBuffer(Buffer *buffer) {
     BeginTextureMode(buffer->renderTex);
     ClearBackground(BLACK);
     Vector2 textOffset = {0,-buffer->viewLoc};
-    
+
     f32 scaleFactor = buffer->fontSize/buffer->font.baseSize;
-    
+
     for (usize i=0; i < buffer->bufferLen+1; ++i) {
         s32 codepoint = 0;
         s32 index = 0;
-    
+
         if (i < buffer->bufferLen) {
             codepoint = buffer->buffer[i];
             index = GetGlyphIndex(buffer->font, codepoint);
         }
-    
+
         if (buffer->cursorPos == i) {
             DrawRectangleV(textOffset,
                            (Vector2){buffer->font.recs[index].width *scaleFactor + buffer->textSpacing,
                                      buffer->fontSize + buffer->textLineSpacing},
                            PINK);
         }
-        
+
         if (i >= buffer->bufferLen) continue;
-        
+
         if (codepoint == '\n') {
             textOffset.y += (buffer->fontSize + buffer->textLineSpacing);
             textOffset.x = 0.0f;
         } else {
             f32 newXOff = 0;
-            
-            if (buffer->font.glyphs[index].advanceX == 0) 
+
+            if (buffer->font.glyphs[index].advanceX == 0)
                 newXOff = ((f32)buffer->font.recs[index].width*scaleFactor + buffer->textSpacing);
             else
                 newXOff = ((f32)buffer->font.glyphs[index].advanceX*scaleFactor + buffer->textSpacing);
-            
+
             if (textOffset.x+newXOff > buffer->renderTex.texture.width) {
                 textOffset.x = 0;
                 textOffset.y += (buffer->fontSize + buffer->textLineSpacing);
             }
-            
-            if ((codepoint != ' ') && 
-                (codepoint != '\t') && 
-                (textOffset.y >= 0) && 
+
+            if ((codepoint != ' ') &&
+                (codepoint != '\t') &&
+                (textOffset.y >= 0) &&
                 ((textOffset.y+buffer->fontSize) <= buffer->renderTex.texture.height)) {
+                Vector2 pos = {floor(textOffset.x), floor(textOffset.y)};
+
                 BeginShaderMode(buffer->shader);
                 DrawTextCodepoint(buffer->font,
                                   codepoint,
-                                  textOffset,
+                                  pos,
                                   buffer->fontSize,
                                   WHITE);
                 EndShaderMode();
             }
-            
+
             textOffset.x += newXOff;
-        }   
+        }
     }
-    
+
     // Draw the status bar.
     f32 statusBarHeight = buffer->fontSize + 2*buffer->textLineSpacing;
     DrawRectangle(0, GetScreenHeight()-statusBarHeight, GetScreenWidth(), statusBarHeight, WHITE);
-    
+
     char *lcText = tfmt(&buffer->tempArena, "Line: %d Col: %d", buffer->cursorLine+1, buffer->cursorCol+1);
-    
+
     Vector2 mt = MeasureTextEx(buffer->font, lcText, buffer->fontSize, buffer->textSpacing);
-    
+
     // DrawFText(&buffer->tempArena,
     //           400, 300, 20, PINK, "mt: (%.4f,%.4f)", mt.x, mt.y);
-    
-    DrawTextEx(buffer->font, lcText, 
-             (Vector2){buffer->renderTex.texture.width-(mt.x + 2*buffer->textSpacing), 
-             buffer->renderTex.texture.height-(buffer->fontSize + buffer->textLineSpacing)}, 
+
+    DrawTextEx(buffer->font, lcText,
+             (Vector2){buffer->renderTex.texture.width-(mt.x + 2*buffer->textSpacing),
+             buffer->renderTex.texture.height-(buffer->fontSize + buffer->textLineSpacing)},
              buffer->fontSize, buffer->textSpacing, BLACK);
-             
+
     char *pathText = tfmt(&buffer->tempArena, "Path: %.*s", buffer->pathLen, buffer->path);
-    
+
     mt = MeasureTextEx(buffer->font, pathText, buffer->fontSize, buffer->textSpacing);
-      
-    DrawTextEx(buffer->font, pathText, 
-             (Vector2){2*buffer->textSpacing, 
-             buffer->renderTex.texture.height-(buffer->fontSize + buffer->textLineSpacing)}, 
+
+    DrawTextEx(buffer->font, pathText,
+             (Vector2){2*buffer->textSpacing,
+             buffer->renderTex.texture.height-(buffer->fontSize + buffer->textLineSpacing)},
              buffer->fontSize, buffer->textSpacing, BLACK);
-    
+
     EndTextureMode();
-    
-    DrawTextureRec(buffer->renderTex.texture, 
-                           (Rectangle) {0,0,buffer->renderTex.texture.width,-buffer->renderTex.texture.height}, 
-                           (Vector2){0,0}, 
+
+    DrawTextureRec(buffer->renderTex.texture,
+                           (Rectangle) {0,0,buffer->renderTex.texture.width,-buffer->renderTex.texture.height},
+                           (Vector2){0,0},
                            WHITE);
-    
+
     ResetArena(&buffer->tempArena);
 }
 
 void BufferFixCursorPos(Buffer *buffer) {
     usize l=0, c=0;
-    
+
     for (usize i=0; i < buffer->bufferLen+1; ++i) {
         if (l==buffer->cursorLine && c==buffer->cursorCol) {
             buffer->cursorPos = i;
             return;
         }
-        
+
         if (i < buffer->bufferLen) {
             if (buffer->buffer[i] == '\n' && l==buffer->cursorLine) {
                 buffer->cursorPos = i;
                 return;
             }
-            
+
             if (buffer->buffer[i] == '\n' && l!=buffer->cursorLine) {
                 l++;
                 c=0;
@@ -333,7 +337,7 @@ void BufferFixCursorPos(Buffer *buffer) {
                 return;
             }
         }
-        
+
         c++;
     }
 }
@@ -342,7 +346,7 @@ void BufferFixCursorLineCol(Buffer *buffer) {
     buffer->cursorLine = 0;
     buffer->cursorCol  = 0;
     for (usize i=0; i < buffer->cursorPos; ++i) {
-        
+
         if (buffer->buffer[i] == '\n' && i!=buffer->cursorPos) {
             buffer->cursorLine++;
             buffer->cursorCol=0;
@@ -354,31 +358,31 @@ s32 BufferOpenFile(Buffer *buffer) {
     char *path = tfmt(&buffer->tempArena, "%.*s", buffer->pathLen, buffer->path);
     printf("%s\n", path);
     buffer->file = fopen(path, "r");
-    
+
     if (!buffer->file) {
         buffer->pathLen = 0;
         return -1;
     }
-    
+
     fseek(buffer->file, 0L, SEEK_END);
     usize fileSize = ftell(buffer->file);
     rewind(buffer->file);
-    
+
     char *fileContents = malloc(fileSize+1);
-    
+
     fread(fileContents, fileSize, 1, buffer->file);
-    
+
     printf("%d\n", fileSize);
-    
+
     for (usize i=0;i<fileSize; ) {
         printf("%d\n", i);
         s32 cps;
         InsertBuffer(buffer, GetCodepointNext(fileContents+i, &cps));
         i+=cps;
     }
-    
+
     fclose(buffer->file);
-    
+
     buffer->cursorPos = 0;
     BufferFixCursorLineCol(buffer);
 }
@@ -386,24 +390,24 @@ s32 BufferOpenFile(Buffer *buffer) {
 s32 BufferSave(Buffer *buffer) {
     f64 startTime = GetTime();
     buffer->file = fopen(buffer->path, "w");
-    
+
     for (usize i=0;i<buffer->bufferLen;++i) {
         s32 size = 0;
         char *utf8 = CodepointToUTF8(buffer->buffer[i], &size);
         usize wsize = fwrite(utf8, size, 1, buffer->file);
-        
+
         // printf("%d\n", wsize);
     }
-    
+
     fclose(buffer->file);
-    
+
     f64 elapsedTime = GetTime()-startTime;
     printf("Saved in %.2f seconds.\n", elapsedTime);
 }
 
 void HandleInput(Editor *ed) {
     Buffer *buffer = ed->buffers+ed->selectedBuffer;
-    
+
     if (IsKeyPressed(KEY_LEFT) || IsKeyPressedRepeat(KEY_LEFT)) {
         if (buffer->cursorPos) {
             buffer->cursorPos--;
@@ -428,7 +432,7 @@ void HandleInput(Editor *ed) {
             BufferFixCursorPos(buffer);
         }
     }
-    
+
     if (IsKeyPressed(KEY_BACKSPACE) || IsKeyPressedRepeat(KEY_BACKSPACE)) {
         switch (buffer->mode) {
             case BMode_Norm: BackspaceBuffer(buffer); break;
@@ -437,12 +441,12 @@ void HandleInput(Editor *ed) {
             } break;
         }
     }
-    
+
     if (IsKeyPressed(KEY_DELETE) || IsKeyPressedRepeat(KEY_DELETE)) {
-        if (buffer->cursorPos < buffer->bufferLen) buffer->cursorPos++; 
+        if (buffer->cursorPos < buffer->bufferLen) buffer->cursorPos++;
         BackspaceBuffer(buffer);
     }
-    
+
     if (IsKeyPressed(KEY_ENTER) || IsKeyPressedRepeat(KEY_ENTER)) {
         switch (buffer->mode) {
             case BMode_Norm: InsertBuffer(buffer, '\n'); break;
@@ -453,12 +457,12 @@ void HandleInput(Editor *ed) {
             } break;
         }
     }
-    
+
     if (IsKeyPressed(KEY_TAB) || IsKeyPressedRepeat(KEY_TAB)) {
         s32 spacesToInsert = 4-(buffer->cursorCol % 4);
         for (s32 i=0;i<spacesToInsert;++i) InsertBuffer(buffer, ' ');
     }
-    
+
     if (IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER)) {
         s32 key;
         if (key = GetKeyPressed()) {
@@ -488,15 +492,15 @@ void HandleInput(Editor *ed) {
                         memmove(newPath, buffer->path, buffer->pathLen);
                         free(buffer->path);
                         buffer->path = newPath;
-                    } 
-                    
+                    }
+
                     buffer->path[buffer->pathLen++] = c;
                 } break;
             }
-            
+
         }
     }
-    
+
     Vector2 movement = GetMouseWheelMoveV();
     ed->buffers[ed->selectedBuffer].viewLoc += -movement.y*10;
 }
