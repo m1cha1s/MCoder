@@ -1,7 +1,22 @@
-CC := cc
+ifeq ($(OS),Windows_NT)   # WARNING: Not tested.
+    CC := cl
+    MAKE := nmake
+    # This is surely wrong.
+    CFLAGS := -O2 -g -I raylib/src
+else
+    detected_OS := $(shell uname)  # same as "uname -s"
 
-CFLAGS := -O2 -g -I raylib/src
-LDFLAGS := -framework Cocoa -framework IOKit -framework CoreFoundation
+    CC := cc
+    MAKE := make
+    CFLAGS := -O2 -g -I raylib/src
+
+    ifeq ($(detected_OS),Darwin)
+   		LDFLAGS := -framework Cocoa -framework IOKit -framework CoreFoundation
+    else
+    	LDFLAGS := -lGL -lm -lpthread -ldl -lrt -lX11
+    endif
+endif
+
 
 EXE := MCoder
 
@@ -11,7 +26,7 @@ $(EXE): $(SRC) raylib/src/libraylib.a
 	$(CC) $^ -o $@ $(CFLAGS) $(LDFLAGS)
 
 raylib/src/libraylib.a: raylib
-	make -C raylib/src PLATFORM=PLATFORM_DESKTOP -j
+	$(MAKE) -C raylib/src PLATFORM=PLATFORM_DESKTOP -j
 
 raylib:
 	git submodule update --init --recursive
