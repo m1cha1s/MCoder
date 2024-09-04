@@ -93,6 +93,22 @@ void HandleInput(Editor *ed, SDL_Event *event);
 
 void UpdateViewport(Editor *ed, f32 width, f32 height);
 
+void *scp(void *res) {
+    if (!res) {
+        fprintf(stderr, "SDL error: %s\n", SDL_GetError());
+        exit(-1);
+    }
+    return res;
+}
+
+s32 scc(s32 res) {
+    if (res) {
+        fprintf(stderr, "SDL error: %s\n", SDL_GetError());
+        exit(-1);
+    }
+    return res;
+}
+
 // --- Globals ---
 
 static SDL_Window *window = NULL;
@@ -140,27 +156,30 @@ s32 main() {
 }
 
 void Init() {
-    if (SDL_Init(SDL_INIT_EVERYTHING)) {
-        printf("SDL error: %s\n", SDL_GetError());
-        exit(-1);
-    }
+    scc(SDL_Init(SDL_INIT_EVERYTHING));
 
-    window = SDL_CreateWindow("MCoder",
-                              SDL_WINDOWPOS_CENTERED,
-                              SDL_WINDOWPOS_CENTERED,
-                              WIDTH, HEIGHT, 0);
-    if (!window) {
-        printf("SDL error: %s\n", SDL_GetError());
-        exit(-1);
-    }
+    u32 flags = SDL_OPENGL;
 
-    u32 renderFlags = SDL_RENDERER_ACCELERATED;
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 
-    renderer = SDL_CreateRenderer(window, -1, renderFlags);
-    if (!renderer) {
-        printf("SDL error: %s\n", SDL_GetError());
-        exit(-1);
-    }
+    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, true);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+
+    window = scp(SDL_CreateWindow("MCoder",
+                                  SDL_WINDOWPOS_CENTERED,
+                                  SDL_WINDOWPOS_CENTERED,
+                                  WIDTH, HEIGHT,
+                                  SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL));
+
+    // u32 renderFlags = SDL_RENDERER_ACCELERATED;
+    //
+    // renderer = SDL_CreateRenderer(window, -1, renderFlags);
+    // if (!renderer) {
+    //     printf("SDL error: %s\n", SDL_GetError());
+    //     exit(-1);
+    // }
 }
 
 Buffer InitBuffer(usize cap) {
