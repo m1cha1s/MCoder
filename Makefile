@@ -10,10 +10,12 @@ else
     MAKE := make
     CFLAGS := -O2 -g -I SDL/include
 
-    ifeq ($(detected_OS),Darwin)
-	LDFLAGS := -framework Cocoa -framework IOKit -framework CoreFoundation
+    ifneq (,$(findstring Darwin,$(detected_OS)))
+        LDFLAGS := -framework CoreVideo -framework Cocoa -framework IOKit -framework ForceFeedback -framework Carbon -framework CoreAudio \
+        -framework AudioToolbox -framework AVFoundation -framework Foundation -weak_framework GameController -weak_framework Metal \
+        -weak_framework QuartzCore -weak_framework CoreHaptics -lm
     else
-    	LDFLAGS := -lm
+        LDFLAGS := -lm
     endif
 endif
 
@@ -26,14 +28,14 @@ OBJ := $(SRC:.c=.o)
 $(EXE): $(OBJ) build/libSDL2.a
 	$(CC) $^ -o $@ $(LDFLAGS)
 
-%.o: %.c
+%.o: %.c SDL/include
 	$(CC) $< -c -o $@ $(CFLAGS)
 
-build/libSDL2.a: SDL/src
+build/libSDL2.a: SDL/include
 	cmake -DSDL_STATIC=ON -DSDL_SHARED=OFF -S SDL -B build
 	cmake --build build
 
-SDL/src:
+SDL/include:
 	git submodule update --init --recursive
 
 .PHONY: clean build run
