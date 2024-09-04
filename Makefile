@@ -10,10 +10,10 @@ else
     MAKE := make
     CFLAGS := -O2 -g -I raylib/src
 
-    ifeq ($(detected_OS),Darwin)
-   		LDFLAGS := -framework Cocoa -framework IOKit -framework CoreFoundation
+    ifneq (,$(findstring Darwin,$(detected_OS)))
+        LDFLAGS := -framework Cocoa -framework IOKit -framework CoreFoundation
     else
-    	LDFLAGS := -lGL -lm -lpthread -ldl -lrt -lX11
+        LDFLAGS := -lGL -lm -lpthread -ldl -lrt -lX11
     endif
 endif
 
