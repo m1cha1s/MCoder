@@ -1,13 +1,9 @@
-#if  defined(ARRAYLIST_T) && !defined(T)
-
 #include "utils.h"
 
 #define _AL(x) GLUE(_Arraylist_,x)
 #define AL(x) GLUE(Arraylist_,x)
 
-#define T ARRAYLIST_T
-
-typedef struct _AL(T) {
+typedef struct AL(T) {
     T *array;
     usize cap;
     usize len;
@@ -88,8 +84,5 @@ void GLUE(AL(T),_Reserve)(AL(T) *al, usize len) {
 #endif
 
 #undef T
-#undef ARRAYLIST_T
 #undef _AL
 #undef AL
-
-#endif

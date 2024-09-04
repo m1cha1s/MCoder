@@ -8,7 +8,7 @@ typedef unsigned int u32;
 typedef int s32;
 
 typedef size_t usize;
-typedef ssize_t ssize;
+// typedef signed size_t ssize;
 
 typedef float f32;
 typedef double f64;
@@ -20,7 +20,10 @@ typedef double f64;
 #define MB(x) (1024*KB(x))
 #define GB(x) (1024*MB(x))
 
+#define TEMP_ARENA_SIZE KB(1)
+
 #include "arena.h"
+#include <raylib.h>
 
 char *tfmt(Arena *arena, const char * format, ...);
 
