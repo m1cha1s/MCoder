@@ -163,7 +163,7 @@ void HandleInput(Editor *ed) {
         BufferFixCursorLineCol(buffer);
     }
 
-    if (IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER)) {
+    if (IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER) || IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) {
         s32 key;
         if ((key = GetKeyPressed())) {
             if (key == KEY_S) {
@@ -202,7 +202,7 @@ void HandleInput(Editor *ed) {
     }
 
     Vector2 movement = GetMouseWheelMoveV();
-    buffer->viewLoc += -movement.y*10;
+    buffer->viewLoc += -movement.y*100;
     if (buffer->viewLoc > buffer->bufferLines * (buffer->fontSize+buffer->textLineSpacing))
         buffer->viewLoc=buffer->bufferLines * (buffer->fontSize+buffer->textLineSpacing);
     if (buffer->viewLoc < 0) buffer->viewLoc=0;

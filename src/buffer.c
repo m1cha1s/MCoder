@@ -66,7 +66,7 @@ void DrawBuffer(Buffer *buffer) {
 
     f32 scaleFactor = buffer->fontSize/buffer->font.baseSize;
 
-    BeginShaderMode(buffer->shader);
+    // BeginShaderMode(buffer->shader);
     for (usize i=0; i < buffer->buffer.len+1; ++i) {
         s32 codepoint = 0;
         s32 index = 0;
@@ -117,7 +117,7 @@ void DrawBuffer(Buffer *buffer) {
                 textOffset.x += newXOff;
         }
     }
-    EndShaderMode();
+    // EndShaderMode();
 
     // Draw the status bar.
     f32 statusBarHeight = buffer->fontSize + 2*buffer->textLineSpacing;
@@ -129,34 +129,34 @@ void DrawBuffer(Buffer *buffer) {
 
     // DrawFText(&buffer->tempArena,
     //           400, 300, 20, PINK, "mt: (%.4f,%.4f)", mt.x, mt.y);
-    BeginShaderMode(buffer->shader);
+    // BeginShaderMode(buffer->shader);
     DrawTextEx(buffer->font, lcText,
                (Vector2){buffer->renderTex.texture.width-(mt.x + 2*buffer->textSpacing),
                    buffer->renderTex.texture.height-(buffer->fontSize + buffer->textLineSpacing)},
                buffer->fontSize, buffer->textSpacing, BLACK);
-    EndShaderMode();
+    // EndShaderMode();
 
     char *pathText = tfmt(&buffer->tempArena, "<%.*s>", buffer->path.len, buffer->path.array);
 
     mt = MeasureTextEx(buffer->font, pathText, buffer->fontSize, buffer->textSpacing);
 
-    BeginShaderMode(buffer->shader);
+    // BeginShaderMode(buffer->shader);
     DrawTextEx(buffer->font, pathText,
                (Vector2){2*buffer->textSpacing+(buffer->renderTex.texture.width/2)-(mt.x/2),
                    buffer->renderTex.texture.height-(buffer->fontSize + buffer->textLineSpacing)},
                buffer->fontSize, buffer->textSpacing, BLACK);
-    EndShaderMode();
+    // EndShaderMode();
 
     char *msgText = tfmt(&buffer->tempArena, "%.*s", buffer->msg.len, buffer->msg.array);
 
     mt = MeasureTextEx(buffer->font, pathText, buffer->fontSize, buffer->textSpacing);
 
-    BeginShaderMode(buffer->shader);
+    // BeginShaderMode(buffer->shader);
     DrawTextEx(buffer->font, msgText,
                (Vector2){2*buffer->textSpacing,
                    buffer->renderTex.texture.height-(buffer->fontSize + buffer->textLineSpacing)},
                buffer->fontSize, buffer->textSpacing, BLACK);
-    EndShaderMode();
+    // EndShaderMode();
 
     EndTextureMode();
 
@@ -287,7 +287,8 @@ void BufferLoadFont(Buffer *buffer, s32 size) {
 
     buffer->font.baseSize = size;
     buffer->font.glyphCount = 95;
-    buffer->font.glyphs = LoadFontData(fd, fdSize, size, 0, 0, FONT_SDF);
+    // buffer->font.glyphs = LoadFontData(fd, fdSize, size, 0, 0, FONT_SDF);
+    buffer->font.glyphs = LoadFontData(fd, fdSize, size, 0, 0, FONT_DEFAULT);
 
     Image atlas = GenImageFontAtlas(buffer->font.glyphs, &buffer->font.recs, 95, size, 0, 1);
     buffer->font.texture = LoadTextureFromImage(atlas);

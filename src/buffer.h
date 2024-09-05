@@ -10,6 +10,8 @@
 #include "arraylist.h"
 #define T char
 #include "arraylist.h"
+// #define T Line
+// #include "arraylist.h"
 
 #endif
 
@@ -63,7 +65,9 @@ void DeinitBuffer(Buffer *buffer);
 void InsertBuffer(Buffer *buffer, s32 codepoint);
 void BackspaceBuffer(Buffer *buffer);
 void DrawBuffer(Buffer *buffer);
-s32 BufferOpenFile(Buffer *buffer);
+s32 BufferOpenFile(Buffer *buffer);// s32 *buffer;
+    // usize bufferLen;
+    // usize bufferCap;
 s32 BufferSave(Buffer *buffer);
 void BufferLoadFont(Buffer *buffer, s32 size);
 
