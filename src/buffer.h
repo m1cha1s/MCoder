@@ -18,6 +18,11 @@ typedef enum _BufferMode {
     BMode_Open,
 } BufferMode;
 
+typedef struct _Line {
+    usize start;
+    usize end;
+} Line;
+
 typedef struct _Buffer {
     char *fontPath;
     Font font;
