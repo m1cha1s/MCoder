@@ -20,7 +20,7 @@ endif
 
 EXE := MCoder
 
-SRC := $(shell find . -maxdepth 1 -name "*.c")
+SRC := $(shell find src -maxdepth 1 -name "*.c")
 
 $(EXE): $(SRC) raylib/src/libraylib.a
 	$(CC) $^ -o $@ $(CFLAGS) $(LDFLAGS)
@@ -39,4 +39,4 @@ run: $(EXE)
 	./$(EXE)
 
 clean:
-	rm -f $(EXE)
+	rm -rf $(EXE) *.dSYM

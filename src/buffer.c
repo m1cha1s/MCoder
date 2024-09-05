@@ -9,7 +9,7 @@ Buffer InitBuffer(usize cap) {
         .fontPath = "assets/IosevkaFixed-Medium.ttf",
         .fontSize = 20,
         .fontSpacing = 3,
-        .shader = LoadShader(NULL, "sdf.fs"),
+        .shader = LoadShader(NULL, "shaders/sdf.fs"),
 
         .textLineSpacing = 2,
         .textSpacing = 3,
@@ -66,6 +66,7 @@ void DrawBuffer(Buffer *buffer) {
 
     f32 scaleFactor = buffer->fontSize/buffer->font.baseSize;
 
+    BeginShaderMode(buffer->shader);
     for (usize i=0; i < buffer->buffer.len+1; ++i) {
         s32 codepoint = 0;
         s32 index = 0;
@@ -106,18 +107,17 @@ void DrawBuffer(Buffer *buffer) {
                 ((textOffset.y+buffer->fontSize) <= buffer->renderTex.texture.height)) {
                 Vector2 pos = {floor(textOffset.x), floor(textOffset.y)};
 
-            BeginShaderMode(buffer->shader);
             DrawTextCodepoint(buffer->font,
                               codepoint,
                               pos,
                               buffer->fontSize,
                               WHITE);
-            EndShaderMode();
                 }
 
                 textOffset.x += newXOff;
         }
     }
+    EndShaderMode();
 
     // Draw the status bar.
     f32 statusBarHeight = buffer->fontSize + 2*buffer->textLineSpacing;
