@@ -197,7 +197,6 @@ void HandleInput(Editor *ed) {
                     Arraylist_char_Push(&buffer->path, c);
                 } break;
             }
-
         }
     }
 
