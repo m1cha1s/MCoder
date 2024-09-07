@@ -8,21 +8,21 @@
 
 #define IMPLS
 
-#include "buffer.h"
+# include "buffer.h"
 
-#include "utils.h"
-#include "arena.h"
+# include "utils.h"
+# include "arena.h"
 
 
-#ifndef ARRAYLIST
-#define ARRAYLIST
+# ifndef ARRAYLIST
+# define ARRAYLIST
 
-#define T s32
-#include "arraylist.h"
-#define T char
-#include "arraylist.h"
+#  define T s32
+#  include "arraylist.h"
+#  define T char
+#  include "arraylist.h"
 
-#endif
+# endif
 
 #define FONT_BASE_SIZE 128
 
