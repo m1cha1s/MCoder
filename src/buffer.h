@@ -2,6 +2,12 @@
 #define _BUFFER_H
 
 #include "utils.h"
+#include "memory.h"
+
+typedef struct _Line {
+    usize start;
+    usize end;
+} Line;
 
 #ifndef ARRAYLIST
 #define ARRAYLIST
@@ -10,8 +16,8 @@
 #include "arraylist.h"
 #define T char
 #include "arraylist.h"
-// #define T Line
-// #include "arraylist.h"
+#define T Line
+#include "arraylist.h"
 
 #endif
 
@@ -19,11 +25,6 @@ typedef enum _BufferMode {
     BMode_Norm,
     BMode_Open,
 } BufferMode;
-
-typedef struct _Line {
-    usize start;
-    usize end;
-} Line;
 
 typedef struct _Buffer {
     char *fontPath;
@@ -43,11 +44,10 @@ typedef struct _Buffer {
     usize bufferLines;
 
     usize cursorPos;
-
+    
     usize cursorLine;
-    usize cursorCol;
 
-    Arena tempArena;
+    Alloc tempAlloc;
 
     FILE *file;
     Arraylist_char path;
@@ -58,6 +58,8 @@ typedef struct _Buffer {
     BufferMode mode;
 
     Arraylist_char msg;
+    
+    Arraylist_Line lines;
 } Buffer;
 
 Buffer InitBuffer(usize cap);

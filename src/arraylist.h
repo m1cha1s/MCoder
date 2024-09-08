@@ -57,7 +57,7 @@ void GLUE(AL(T),_Push)(AL(T) *al, T val) {
 }
 
 T GLUE(AL(T),_Pop)(AL(T) *al) {
-    if (!al->len) return (T)0;
+    if (!al->len) return (T){0};
     T val = al->array[al->len-1];
     GLUE(AL(T),_Remove)(al, al->len-1);
     return val;

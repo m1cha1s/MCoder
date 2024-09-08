@@ -8,10 +8,10 @@
 
 #define IMPLS
 
-# include "buffer.h"
+#include "buffer.h"
 
-# include "utils.h"
-# include "arena.h"
+#include "utils.h"
+#include "memory.h"
 
 
 # ifndef ARRAYLIST
@@ -44,7 +44,7 @@ typedef struct _Editor {
 
     f32 width, height;
 
-    Arena tempArena;
+    Alloc tempAlloc;
 } Editor;
 
 void HandleInput(Editor *ed);
@@ -62,7 +62,7 @@ s32 main() {
             InitBuffer(KB(1)),
             InitBuffer(KB(1)),
         },
-        .tempArena = InitArena(TEMP_ARENA_SIZE),
+        .tempAlloc = NewArenaAlloc(SysAlloc, TEMP_ARENA_SIZE),
     };
 
     // BufferOpenFile(&buffer, "main.c");
@@ -80,7 +80,7 @@ s32 main() {
 
         EndDrawing();
 
-        ResetArena(&ed.tempArena);
+        memClear(ed.tempAlloc);
     }
 
     for (usize i=0;i<BUFFER_COUNT;i++)
@@ -183,7 +183,7 @@ void HandleInput(Editor *ed) {
                 buffer->mode = BMode_Open;
                 buffer->path.len = 0;
 
-                char * msg = tfmt(&buffer->tempArena, "Specify path");
+                char * msg = tfmt(buffer->tempAlloc, "Specify path");
                 buffer->msg.len=0;
                 for (usize i=0;i<strlen(msg);++i) Arraylist_char_Push(&buffer->msg, msg[i]);
             }

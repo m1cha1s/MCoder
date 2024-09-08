@@ -17,13 +17,15 @@ Buffer InitBuffer(usize cap) {
         .buffer = Arraylist_s32_Init(cap),
         .cursorPos = 0,
 
-        .tempArena = InitArena(TEMP_ARENA_SIZE),
+        .tempAlloc = NewArenaAlloc(SysAlloc, TEMP_ARENA_SIZE),
 
         .path = Arraylist_char_Init(8),
 
         .renderTex = LoadRenderTexture(GetScreenWidth(), GetScreenHeight()),
 
         .msg = Arraylist_char_Init(8),
+        
+        .lines = Arraylist_Line_Init(8),
     };
 
     BufferLoadFont(&b, 20);
@@ -34,7 +36,30 @@ Buffer InitBuffer(usize cap) {
 void DeinitBuffer(Buffer *buffer) {
     UnloadFont(buffer->font);
     UnloadShader(buffer->shader);
-    DeinitArena(&buffer->tempArena);
+    DeleteArenaAlloc(SysAlloc, buffer->tempAlloc);
+}
+
+void RescanBuffer(Buffer *buffer) {
+    buffer->lines.len = 0; // Reseting the lines.
+    
+    usize lineStart = 0;
+    for (usize i=0; i < buffer->buffer.len;++i) {
+        if (buffer->buffer.array[i] == '\n') {
+            Arraylist_Line_Push(&buffer->lines, (Line){lineStart, i});
+            lineStart = i+1;
+        }
+    }
+}
+
+void InsertBufferBlock(Buffer *buffer, u8 *data, usize dataLen) {
+    for (usize i=0;i<dataLen;) {
+        s32 cps;
+        Arraylist_s32_Insert(&buffer->buffer, GetCodepointNext(data+i, &cps), buffer->cursorPos);
+        buffer->cursorPos++;
+        i+=cps;
+    }
+    
+    RescanBuffer(buffer);
 }
 
 void InsertBuffer(Buffer *buffer, s32 codepoint) {
@@ -44,7 +69,8 @@ void InsertBuffer(Buffer *buffer, s32 codepoint) {
 
     buffer->cursorPos++;
 
-    BufferFixCursorLineCol(buffer);
+    // TODO(m1cha1s): Remove, add a line buffer to keep track of lines and so on.
+    BufferFixCursorLineCol(buffer); // NOTE(m1cha1s): This takes 99.99% of the time during loading a file!!!
 }
 
 void BackspaceBuffer(Buffer *buffer) {
@@ -71,6 +97,7 @@ void DrawBuffer(Buffer *buffer) {
         s32 codepoint = 0;
         s32 index = 0;
 
+        // TODO(m1cha1s): Don't render the whole buffer, just the things that are visible.
         if (i < buffer->buffer.len) {
             codepoint = buffer->buffer.array[i];
             index = GetGlyphIndex(buffer->font, codepoint);
@@ -123,7 +150,7 @@ void DrawBuffer(Buffer *buffer) {
     f32 statusBarHeight = buffer->fontSize + 2*buffer->textLineSpacing;
     DrawRectangle(0, GetScreenHeight()-statusBarHeight, GetScreenWidth(), statusBarHeight, WHITE);
 
-    char *lcText = tfmt(&buffer->tempArena, "Line: %d Col: %d", buffer->cursorLine+1, buffer->cursorCol+1);
+    char *lcText = tfmt(buffer->tempAlloc, "Line: %d Col: %d", buffer->cursorLine+1, buffer->cursorCol+1);
 
     Vector2 mt = MeasureTextEx(buffer->font, lcText, buffer->fontSize, buffer->textSpacing);
 
@@ -136,7 +163,7 @@ void DrawBuffer(Buffer *buffer) {
                buffer->fontSize, buffer->textSpacing, BLACK);
     // EndShaderMode();
 
-    char *pathText = tfmt(&buffer->tempArena, "<%.*s>", buffer->path.len, buffer->path.array);
+    char *pathText = tfmt(buffer->tempAlloc, "<%.*s>", buffer->path.len, buffer->path.array);
 
     mt = MeasureTextEx(buffer->font, pathText, buffer->fontSize, buffer->textSpacing);
 
@@ -147,7 +174,7 @@ void DrawBuffer(Buffer *buffer) {
                buffer->fontSize, buffer->textSpacing, BLACK);
     // EndShaderMode();
 
-    char *msgText = tfmt(&buffer->tempArena, "%.*s", buffer->msg.len, buffer->msg.array);
+    char *msgText = tfmt(buffer->tempAlloC, "%.*s", buffer->msg.len, buffer->msg.array);
 
     mt = MeasureTextEx(buffer->font, pathText, buffer->fontSize, buffer->textSpacing);
 
@@ -165,7 +192,7 @@ void DrawBuffer(Buffer *buffer) {
                    (Vector2){0,0},
                    WHITE);
 
-    ResetArena(&buffer->tempArena);
+    memClear(buffer->tempAlloc);
 }
 
 void BufferFixCursorPos(Buffer *buffer) {
@@ -214,12 +241,12 @@ void BufferFixCursorLineCol(Buffer *buffer) {
 s32 BufferOpenFile(Buffer *buffer) {
     f64 startTime = GetTime();
 
-    char *path = tfmt(&buffer->tempArena, "%.*s", buffer->path.len, buffer->path.array);
+    char *path = tfmt(buffer->tempAlloc, "%.*s", buffer->path.len, buffer->path.array);
     buffer->file = fopen(path, "r");
 
     if (!buffer->file) {
         buffer->path.len = 0;
-        char * msg = tfmt(&buffer->tempArena, "%s not found", path);
+        char * msg = tfmt(buffer->tempAlloc, "%s not found", path);
         buffer->msg.len=0;
         for (usize i=0;i<strlen(msg);++i) Arraylist_char_Push(&buffer->msg, msg[i]);
         return -1;
@@ -247,7 +274,7 @@ s32 BufferOpenFile(Buffer *buffer) {
 
     f64 elapsedTime = GetTime()-startTime;
 
-    char * msg = tfmt(&buffer->tempArena, "Opened (%.2fs)", elapsedTime);
+    char * msg = tfmt(buffer->tempAlloc, "Opened (%.2fs)", elapsedTime);
     buffer->msg.len=0;
     for (usize i=0;i<strlen(msg);++i) Arraylist_char_Push(&buffer->msg, msg[i]);
 }
@@ -255,11 +282,11 @@ s32 BufferOpenFile(Buffer *buffer) {
 s32 BufferSave(Buffer *buffer) {
     f64 startTime = GetTime();
 
-    char *path = tfmt(&buffer->tempArena, "%.*s", buffer->path.len, buffer->path.array);
+    char *path = tfmt(buffer->tempAlloc, "%.*s", buffer->path.len, buffer->path.array);
     buffer->file = fopen(path, "w");
 
     if (!buffer->file) {
-        char * msg = tfmt(&buffer->tempArena, "%s not found", path);
+        char * msg = tfmt(buffer->tempAlloc, "%s not found", path);
         buffer->msg.len=0;
         for (usize i=0;i<strlen(msg);++i) Arraylist_char_Push(&buffer->msg, msg[i]);
         return -1;
@@ -275,7 +302,7 @@ s32 BufferSave(Buffer *buffer) {
 
     f64 elapsedTime = GetTime()-startTime;
 
-    char * msg = tfmt(&buffer->tempArena, "Saved (%.2fs)", elapsedTime);
+    char * msg = tfmt(buffer->tempAlloc, "Saved (%.2fs)", elapsedTime);
     buffer->msg.len=0;
     for (usize i=0;i<strlen(msg);++i) Arraylist_char_Push(&buffer->msg, msg[i]);
 }

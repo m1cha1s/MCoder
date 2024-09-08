@@ -22,24 +22,24 @@ typedef double f64;
 
 #define TEMP_ARENA_SIZE KB(1)
 
-#include "arena.h"
+#include "memory.h"
 #include <raylib.h>
 
-char *tfmt(Arena *arena, const char * format, ...);
+char *tfmt(Alloc alloc, const char * format, ...);
 
-s32 DrawFText(Arena *arena, u32 x, u32 y, u32 size, Color c, const char * format, ...);
+s32 DrawFText(Alloc alloc, u32 x, u32 y, u32 size, Color c, const char * format, ...);
 
 #if defined(IMPLS)
 
 #include <stdarg.h>
 
-char *tfmt(Arena *arena, const char * format, ...) {
+char *tfmt(Alloc alloc, const char * format, ...) {
     va_list ptr;
     va_start(ptr, format);
     usize len = vsnprintf(NULL, 0, format, ptr);
     va_end(ptr);
 
-    char *buffer = ArenaAlloc(arena, len+1);
+    char *buffer = memAlloc(alloc, len+1);
 
     if (!buffer) return NULL;
 
@@ -52,13 +52,13 @@ char *tfmt(Arena *arena, const char * format, ...) {
 
 #include <raylib.h>
 
-s32 DrawFText(Arena *arena, u32 x, u32 y, u32 size, Color c, const char * format, ...) {
+s32 DrawFText(Alloc alloc, u32 x, u32 y, u32 size, Color c, const char * format, ...) {
     va_list ptr;
     va_start(ptr, format);
     usize len = vsnprintf(NULL, 0, format, ptr);
     va_end(ptr);
 
-    char *buffer = ArenaAlloc(arena, len+1);
+    char *buffer = memAlloc(alloc, len+1);
 
     if (!buffer) return -1;
 
