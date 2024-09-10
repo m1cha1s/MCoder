@@ -4,6 +4,8 @@
 #include "utils.h"
 #include "memory.h"
 
+#include <stdio.h>
+
 typedef struct _Line {
     usize start;
     usize end;
@@ -44,7 +46,7 @@ typedef struct _Buffer {
     usize bufferLines;
 
     usize cursorPos;
-    
+
     usize cursorLine;
 
     Alloc tempAlloc;
@@ -58,7 +60,7 @@ typedef struct _Buffer {
     BufferMode mode;
 
     Arraylist_char msg;
-    
+
     Arraylist_Line lines;
 } Buffer;
 

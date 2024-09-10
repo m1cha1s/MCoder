@@ -144,7 +144,7 @@ void HandleInput(Editor *ed) {
     }
 
     if (IsKeyPressed(KEY_TAB) || IsKeyPressedRepeat(KEY_TAB)) {
-        s32 spacesToInsert = 4-(buffer->cursorCol % 4);
+        s32 spacesToInsert = 4-((buffer->cursorPos - (buffer->lines.array[buffer->cursorLine].start)) % 4);
         for (s32 i=0;i<spacesToInsert;++i) InsertBuffer(buffer, ' ');
     }
 
@@ -157,10 +157,7 @@ void HandleInput(Editor *ed) {
         usize c = (usize)mPos.x / ((f32)buffer->font.glyphs[0].advanceX*scaleFactor + buffer->textSpacing);
 
         buffer->cursorLine = l;
-        buffer->cursorCol = c;
-
-        BufferFixCursorPos(buffer);
-        BufferFixCursorLineCol(buffer);
+        buffer->cursorPos = min(buffer->lines.array[buffer->cursorLine].start+c, buffer->lines.array[buffer->cursorLine].end);
     }
 
     if (IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER) || IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) {

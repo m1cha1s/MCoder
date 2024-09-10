@@ -1,5 +1,7 @@
 #include "buffer.h"
 
+#include <stdio.h>
+#include <stdlib.h>
 #include <math.h>
 #include <string.h>
 
@@ -24,7 +26,7 @@ Buffer InitBuffer(usize cap) {
         .renderTex = LoadRenderTexture(GetScreenWidth(), GetScreenHeight()),
 
         .msg = Arraylist_char_Init(8),
-        
+
         .lines = Arraylist_Line_Init(8),
     };
 
@@ -41,7 +43,7 @@ void DeinitBuffer(Buffer *buffer) {
 
 void RescanBuffer(Buffer *buffer) {
     buffer->lines.len = 0; // Reseting the lines.
-    
+
     usize lineStart = 0;
     for (usize i=0; i < buffer->buffer.len;++i) {
         if (buffer->buffer.array[i] == '\n') {
@@ -58,19 +60,24 @@ void InsertBufferBlock(Buffer *buffer, u8 *data, usize dataLen) {
         buffer->cursorPos++;
         i+=cps;
     }
-    
+
     RescanBuffer(buffer);
 }
 
 void InsertBuffer(Buffer *buffer, s32 codepoint) {
-    if (codepoint == '\n') buffer->bufferLines++;
-
     Arraylist_s32_Insert(&buffer->buffer, codepoint, buffer->cursorPos);
 
+    buffer->lines.array[buffer->cursorLine].end++;
     buffer->cursorPos++;
 
+    if (codepoint == '\n') {
+        buffer->bufferLines++;
+        Arraylist_Line_Push(&buffer->lines,
+                              (Line){.start=buffer->cursorPos, .end=buffer->cursorPos});
+    }
+
     // TODO(m1cha1s): Remove, add a line buffer to keep track of lines and so on.
-    BufferFixCursorLineCol(buffer); // NOTE(m1cha1s): This takes 99.99% of the time during loading a file!!!
+    // BufferFixCursorLineCol(buffer); // NOTE(m1cha1s): This takes 99.99% of the time during loading a file!!!
 }
 
 void BackspaceBuffer(Buffer *buffer) {
@@ -150,7 +157,7 @@ void DrawBuffer(Buffer *buffer) {
     f32 statusBarHeight = buffer->fontSize + 2*buffer->textLineSpacing;
     DrawRectangle(0, GetScreenHeight()-statusBarHeight, GetScreenWidth(), statusBarHeight, WHITE);
 
-    char *lcText = tfmt(buffer->tempAlloc, "Line: %d Col: %d", buffer->cursorLine+1, buffer->cursorCol+1);
+    char *lcText = tfmt(buffer->tempAlloc, "Line: %d Col: %d", buffer->cursorLine+1, buffer->cursorPos+1-buffer->lines.array[buffer->cursorLine].start);
 
     Vector2 mt = MeasureTextEx(buffer->font, lcText, buffer->fontSize, buffer->textSpacing);
 
@@ -174,7 +181,7 @@ void DrawBuffer(Buffer *buffer) {
                buffer->fontSize, buffer->textSpacing, BLACK);
     // EndShaderMode();
 
-    char *msgText = tfmt(buffer->tempAlloC, "%.*s", buffer->msg.len, buffer->msg.array);
+    char *msgText = tfmt(buffer->tempAlloc, "%.*s", buffer->msg.len, buffer->msg.array);
 
     mt = MeasureTextEx(buffer->font, pathText, buffer->fontSize, buffer->textSpacing);
 
@@ -196,45 +203,25 @@ void DrawBuffer(Buffer *buffer) {
 }
 
 void BufferFixCursorPos(Buffer *buffer) {
-    usize l=0, c=0;
-
-    for (usize i=0; i < buffer->buffer.len+1; ++i) {
-        if (l==buffer->cursorLine && c==buffer->cursorCol) {
-            buffer->cursorPos = i;
-            return;
-        }
-
-        if (i < buffer->buffer.len) {
-            if (buffer->buffer.array[i] == '\n' && l==buffer->cursorLine) {
-                buffer->cursorPos = i;
-                return;
-            }
-
-            if (buffer->buffer.array[i] == '\n' && l!=buffer->cursorLine) {
-                l++;
-                c=0;
-                continue;
-            }
-        } else {
-            if (l==buffer->cursorLine) {
-                buffer->cursorPos = i;
-                return;
-            }
-        }
-
-        c++;
-    }
+    buffer->cursorPos = min(buffer->cursorPos, buffer->lines.array[buffer->cursorLine].end);
 }
 
 void BufferFixCursorLineCol(Buffer *buffer) {
-    buffer->cursorLine = 0;
-    buffer->cursorCol  = 0;
-    for (usize i=0; i < buffer->cursorPos; ++i) {
+    b8 foundLine = false;
+    usize i = 0;
+    for (i = 0; i < buffer->lines.len; ++i) {
+        usize start = buffer->lines.array[i].start;
+        usize end   = buffer->lines.array[i].end;
+        if (buffer->cursorPos >= start && buffer->cursorPos <= end) {
+            foundLine = true;
+            break;
+        }
+    }
 
-        if (buffer->buffer.array[i] == '\n' && i!=buffer->cursorPos) {
-            buffer->cursorLine++;
-            buffer->cursorCol=0;
-        } else buffer->cursorCol++;
+    if (foundLine) {
+        buffer->cursorLine=i;
+    } else {
+        buffer->cursorPos = buffer->lines.array[i].end;
     }
 }
 

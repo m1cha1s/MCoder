@@ -13,6 +13,11 @@ typedef size_t usize;
 typedef float f32;
 typedef double f64;
 
+typedef u8 b8;
+
+#define true 1
+#define false 0
+
 #define _GLUE(a,b) a##b
 #define GLUE(a,b) _GLUE(a,b)
 
@@ -21,6 +26,8 @@ typedef double f64;
 #define GB(x) (1024*MB(x))
 
 #define TEMP_ARENA_SIZE KB(1)
+
+#define min(a,b) (a)<(b)?(a):(b)
 
 #include "memory.h"
 #include <raylib.h>
