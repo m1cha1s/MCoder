@@ -111,7 +111,6 @@ void DrawBuffer(Buffer *buffer) {
         s32 codepoint = 0;
         s32 index = 0;
 
-        // TODO(m1cha1s): Don't render the whole buffer, just the things that are visible.
         if (i < buffer->buffer.len) {
             codepoint = buffer->buffer.array[i];
             index = GetGlyphIndex(buffer->font, codepoint);
@@ -137,10 +136,10 @@ void DrawBuffer(Buffer *buffer) {
             else
                 newXOff = ((f32)buffer->font.glyphs[index].advanceX*scaleFactor + buffer->textSpacing);
 
-            if (textOffset.x+newXOff > buffer->renderTex.texture.width) {
-                textOffset.x = 0;
-                textOffset.y += (buffer->fontSize + buffer->textLineSpacing);
-            }
+            // if (textOffset.x+newXOff > buffer->renderTex.texture.width) {
+            //     textOffset.x = 0;
+            //     textOffset.y += (buffer->fontSize + buffer->textLineSpacing);
+            // }
 
             if ((codepoint != ' ') &&
                 (codepoint != '\t') &&
@@ -148,14 +147,14 @@ void DrawBuffer(Buffer *buffer) {
                 ((textOffset.y+buffer->fontSize) <= buffer->renderTex.texture.height)) {
                 Vector2 pos = {floor(textOffset.x), floor(textOffset.y)};
 
-            DrawTextCodepoint(buffer->font,
-                              codepoint,
-                              pos,
-                              buffer->fontSize,
-                              WHITE);
+                DrawTextCodepoint(buffer->font,
+                                codepoint,
+                                pos,
+                                buffer->fontSize,
+                                WHITE);
                 }
 
-                textOffset.x += newXOff;
+            textOffset.x += newXOff;
         }
     }
     // EndShaderMode();
