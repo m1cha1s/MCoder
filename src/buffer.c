@@ -45,11 +45,16 @@ void RescanBuffer(Buffer *buffer) {
     buffer->lines.len = 0; // Reseting the lines.
 
     usize lineStart = 0;
-    for (usize i=0; i < buffer->buffer.len;++i) {
+    for (usize i=0; i < buffer->buffer.len; ++i) {
         if (buffer->buffer.array[i] == '\n') {
             Arraylist_Line_Push(&buffer->lines, (Line){lineStart, i});
             lineStart = i+1;
         }
+    }
+
+    for (usize i = 0; i < buffer->lines.len; ++i) {
+      Line l = buffer->lines.array[i];
+      printf("Lines[%u] { start: %u end: %u }\n", i, l.start, l.end);
     }
 }
 
@@ -71,7 +76,6 @@ void InsertBuffer(Buffer *buffer, s32 codepoint) {
     buffer->cursorPos++;
 
     if (codepoint == '\n') {
-        buffer->bufferLines++;
         Arraylist_Line_Push(&buffer->lines,
                               (Line){.start=buffer->cursorPos, .end=buffer->cursorPos});
     }
@@ -83,7 +87,10 @@ void InsertBuffer(Buffer *buffer, s32 codepoint) {
 void BackspaceBuffer(Buffer *buffer) {
     if ((!buffer->cursorPos) || (!buffer->buffer.len)) return;
 
-    if (buffer->buffer.array[buffer->cursorPos-1] == '\n') buffer->bufferLines--;
+    if (buffer->buffer.array[buffer->cursorPos-1] == '\n') {
+        buffer->cursorLine--;
+	Arraylist_Line_Remove(&buffer->lines, buffer->cursorLine+1);
+    }
 
     buffer->cursorPos--;
 
@@ -203,7 +210,9 @@ void DrawBuffer(Buffer *buffer) {
 }
 
 void BufferFixCursorPos(Buffer *buffer) {
-    buffer->cursorPos = min(buffer->cursorPos, buffer->lines.array[buffer->cursorLine].end);
+    buffer->cursorPos = min(
+            max(buffer->cursorPos, buffer->lines.array[buffer->cursorLine].start), 
+            buffer->lines.array[buffer->cursorLine].end);
 }
 
 void BufferFixCursorLineCol(Buffer *buffer) {
@@ -246,17 +255,12 @@ s32 BufferOpenFile(Buffer *buffer) {
     char *fileContents = malloc(fileSize+1);
 
     fread(fileContents, fileSize, 1, buffer->file);
-
-    buffer->buffer.len = buffer->cursorPos = 0;
-    for (usize i=0;i<fileSize; ) {
-        s32 cps;
-        InsertBuffer(buffer, GetCodepointNext(fileContents+i, &cps));
-        i+=cps;
-    }
-
     fclose(buffer->file);
 
     buffer->cursorPos = 0;
+
+    InsertBufferBlock(buffer, fileContents, fileSize);
+
     BufferFixCursorLineCol(buffer);
 
     f64 elapsedTime = GetTime()-startTime;

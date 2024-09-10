@@ -38,15 +38,9 @@ typedef struct _Buffer {
     s32 textLineSpacing;
     f32 textSpacing;
 
-    // s32 *buffer;
-    // usize bufferLen;
-    // usize bufferCap;
     Arraylist_s32 buffer;
 
-    usize bufferLines;
-
     usize cursorPos;
-
     usize cursorLine;
 
     Alloc tempAlloc;

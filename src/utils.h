@@ -27,7 +27,9 @@ typedef u8 b8;
 
 #define TEMP_ARENA_SIZE KB(1)
 
+#define max(a,b) (a)<(b)?(b):(a)
 #define min(a,b) (a)<(b)?(a):(b)
+#define clamp(a,l,h) max(l, min(a, h))
 
 #include "memory.h"
 #include <raylib.h>

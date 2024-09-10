@@ -112,7 +112,7 @@ void HandleInput(Editor *ed) {
         }
     }
     if (IsKeyPressed(KEY_DOWN) || IsKeyPressedRepeat(KEY_DOWN)) {
-        if (buffer->cursorLine < buffer->bufferLines) {
+        if (buffer->cursorLine < buffer->lines.len) {
             buffer->cursorLine++;
             BufferFixCursorPos(buffer);
         }
@@ -150,6 +150,11 @@ void HandleInput(Editor *ed) {
 
     if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
         Vector2 mPos = GetMousePosition();
+
+        mPos.x = clamp(mPos.x, 0, GetScreenWidth());
+        mPos.y = clamp(mPos.y, 0, GetScreenHeight());
+
+        printf("Mouse pos { %f %f }\n", mPos.x, mPos.y);
 
         f32 scaleFactor = buffer->fontSize/buffer->font.baseSize;
 
@@ -199,8 +204,8 @@ void HandleInput(Editor *ed) {
 
     Vector2 movement = GetMouseWheelMoveV();
     buffer->viewLoc += -movement.y*100;
-    if (buffer->viewLoc > buffer->bufferLines * (buffer->fontSize+buffer->textLineSpacing))
-        buffer->viewLoc=buffer->bufferLines * (buffer->fontSize+buffer->textLineSpacing);
+    if (buffer->viewLoc > buffer->lines.len * (buffer->fontSize+buffer->textLineSpacing))
+        buffer->viewLoc=buffer->lines.len * (buffer->fontSize+buffer->textLineSpacing);
     if (buffer->viewLoc < 0) buffer->viewLoc=0;
 }
 
