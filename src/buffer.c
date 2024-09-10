@@ -209,9 +209,20 @@ void DrawBuffer(Buffer *buffer) {
 }
 
 void BufferFixCursorPos(Buffer *buffer) {
-    buffer->cursorPos = min(
-            max(buffer->cursorPos, buffer->lines.array[buffer->cursorLine].start), 
-            buffer->lines.array[buffer->cursorLine].end);
+    usize start = buffer->lines.array[buffer->cursorLine].start;
+    usize end   = buffer->lines.array[buffer->cursorLine].end;
+
+    usize col = 0;
+
+    if (buffer->cursorPos > end) {
+        col = buffer->cursorPos - buffer->lines.array[buffer->cursorLine+1].start;
+    } else if (buffer->cursorPos < start) {
+        col = buffer->cursorPos - buffer->lines.array[buffer->cursorLine-1].start;
+    } else {
+        col = buffer->cursorPos - buffer->lines.array[buffer->cursorLine].start;
+    }
+
+    buffer->cursorPos = clamp(start+col, start, end);
 }
 
 void BufferFixCursorLineCol(Buffer *buffer) {
