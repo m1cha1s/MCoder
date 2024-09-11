@@ -107,6 +107,7 @@ void DrawBuffer(Buffer *buffer) {
     f32 scaleFactor = buffer->fontSize/buffer->font.baseSize;
 
     // BeginShaderMode(buffer->shader);
+    BeginBlendMode(BLEND_ALPHA);
     for (usize i=0; i < buffer->buffer.len+1; ++i) {
         s32 codepoint = 0;
         s32 index = 0;
@@ -158,6 +159,7 @@ void DrawBuffer(Buffer *buffer) {
         }
     }
     // EndShaderMode();
+    EndBlendMode();
 
     // Draw the status bar.
     f32 statusBarHeight = buffer->fontSize + 2*buffer->textLineSpacing;
@@ -318,7 +320,7 @@ void BufferLoadFont(Buffer *buffer, s32 size) {
     // buffer->font.glyphs = LoadFontData(fd, fdSize, size, 0, 0, FONT_SDF);
     buffer->font.glyphs = LoadFontData(fd, fdSize, size, 0, 0, FONT_DEFAULT);
 
-    Image atlas = GenImageFontAtlas(buffer->font.glyphs, &buffer->font.recs, 95, size, 0, 1);
+    Image atlas = GenImageFontAtlas(buffer->font.glyphs, &buffer->font.recs, 95, size, 1, 1);
     buffer->font.texture = LoadTextureFromImage(atlas);
     UnloadImage(atlas);
     UnloadFileData(fd);
