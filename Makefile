@@ -8,7 +8,7 @@ else
 
     CC := cc
     MAKE := make
-    CFLAGS := -O2 -g -I raylib/src
+    CFLAGS := -fsanitize=address -O2 -g -I raylib/src
 
     ifneq (,$(findstring Darwin,$(detected_OS)))
         LDFLAGS := -framework Cocoa -framework IOKit -framework CoreFoundation

@@ -22,12 +22,17 @@ void GLUE(AL(T),_Reserve)(AL(T) *al, usize len);
 #ifdef IMPLS
 
 #include <stdlib.h>
+#include <string.h>
 
 AL(T) GLUE(AL(T),_Init)(usize cap) {
-    return (AL(T)){
+    AL(T) al = (AL(T)){
         .array = malloc(cap*sizeof(T)),
         .cap = cap,
     };
+
+    memset(al.array, 0, cap*sizeof(T));
+
+    return al;
 }
 
 void GLUE(AL(T),_Insert)(AL(T) *al, T val, usize i) {

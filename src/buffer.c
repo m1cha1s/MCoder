@@ -18,7 +18,8 @@ Buffer InitBuffer(usize cap) {
 
         .buffer = Arraylist_s32_Init(cap),
         .cursorPos = 0,
-
+        .cursorLine = 0,
+        
         .tempAlloc = NewArenaAlloc(SysAlloc, TEMP_ARENA_SIZE),
 
         .path = Arraylist_char_Init(8),
@@ -85,18 +86,18 @@ void InsertBuffer(Buffer *buffer, s32 codepoint) {
 }
 
 void BackspaceBuffer(Buffer *buffer) {
-    if ((!buffer->cursorPos) || (!buffer->buffer.len)) return;
+    if ((!buffer->cursorPos) || (!buffer->buffer.len) || (buffer->cursorPos-1 >= buffer->buffer.len)) return;
 
     if (buffer->buffer.array[buffer->cursorPos-1] == '\n') {
         buffer->cursorLine--;
-	Arraylist_Line_Remove(&buffer->lines, buffer->cursorLine+1);
+        Arraylist_Line_Remove(&buffer->lines, buffer->cursorLine+1);
     }
 
     buffer->cursorPos--;
 
     Arraylist_s32_Remove(&buffer->buffer, buffer->cursorPos);
 
-    BufferFixCursorLineCol(buffer);
+    //BufferFixCursorLineCol(buffer);
 }
 
 void DrawBuffer(Buffer *buffer) {
